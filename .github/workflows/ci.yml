@@ -1,0 +1,64 @@
+
+name: CI
+ 
+# Runs on every push and every pull request, against both halves of the app.
+# This is the safety net: if this goes red, main is broken and should not be deployed.
+ 
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+ 
+jobs:
+  # ---------- Python AI service ----------
+  ai-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-service
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: ai-service/requirements.txt
+ 
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+ 
+      - name: Run tests
+        run: python -m pytest tests/ -v
+ 
+  # ---------- Next.js web app ----------
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+ 
+      - name: Install dependencies
+        run: npm ci
+ 
+      - name: Lint
+        run: npm run lint
+ 
+      - name: Build
+        env:
+          # Build-time dummy values so `next build` and `prisma generate` succeed
+          # even without real infrastructure connected — CI never talks to a real
+          # DB or the AI service, it just proves the code compiles and typechecks.
+          DATABASE_URL: "postgresql://user:password@localhost:5432/flashcart"
+          AI_SERVICE_URL: "http://localhost:8000"
+        run: npm run build
+ 
