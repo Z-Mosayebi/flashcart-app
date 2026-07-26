@@ -1,0 +1,157 @@
+// Flashcart — German Learning Flashcards with Leitner + AI Tutoring
+// Prisma schema for Postgres (Neon/Supabase on Vercel)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Users ----------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  progress     CardProgress[]
+  attempts     Attempt[]
+  tutorSessions TutorSession[]
+}
+
+// ---------- Source content (from Notion) ----------
+
+// One sync'd Notion page (e.g. "DW"). Keeps a raw snapshot + sync metadata
+// so the sync job can diff what's new since last run.
+model SourceDocument {
+  id             String   @id @default(cuid())
+  notionPageId   String   @unique
+  title          String
+  rawMarkdown    String   @db.Text
+  lastSyncedAt   DateTime @default(now())
+  lastEditedTime DateTime? // Notion's last_edited_time, used for diffing
+
+  topics Topic[]
+}
+
+// A grammar topic / pattern extracted from the notes, e.g. "weswegen relative clause",
+// "aus + Dativ ... werden", "Anbindung an + Akkusativ"
+model Topic {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  pattern     String?  @db.Text // formula, e.g. "der Grund/die Gründe + , weswegen + ... + Verb(end)"
+  language    String   @default("de")
+  createdAt   DateTime @default(now())
+
+  sourceDocumentId String?
+  sourceDocument   SourceDocument? @relation(fields: [sourceDocumentId], references: [id])
+
+  cards Card[]
+}
+
+enum CardType {
+  CLOZE // fill-in-the-blank, e.g. vocab-in-context
+  SENTENCE_PRODUCTION // "build a sentence using this pattern"
+  GRAMMAR_QA // toggle-style Q/A from notes
+  ERROR_CORRECTION // "fix the mistake" cards, sourced from the error log
+  VOCAB // simple term <-> meaning
+}
+
+model Card {
+  id          String   @id @default(cuid())
+  type        CardType
+  prompt      String   @db.Text // question / cloze text / instruction
+  answer      String   @db.Text // expected answer or reference sentence
+  explanation String?  @db.Text // grammar explanation shown after answering
+  hints       String[] @default([])
+  sourceText  String?  @db.Text // original sentence/snippet from Notion this card was generated from
+  createdAt   DateTime @default(now())
+  aiGenerated Boolean  @default(true)
+
+  topicId String
+  topic   Topic  @relation(fields: [topicId], references: [id])
+
+  progress CardProgress[]
+  attempts Attempt[]
+
+  @@index([topicId])
+}
+
+// ---------- Leitner spaced repetition ----------
+
+model CardProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  cardId      String
+  box         Int      @default(1) // Leitner box 1-5
+  dueAt       DateTime @default(now())
+  lastReviewedAt DateTime?
+  correctStreak  Int    @default(0)
+  totalReviews   Int    @default(0)
+  totalCorrect   Int    @default(0)
+  aiDifficulty   Float  @default(0.5) // 0 (easy) - 1 (hard), blended into scheduling
+
+  user User @relation(fields: [userId], references: [id])
+  card Card @relation(fields: [cardId], references: [id])
+
+  @@unique([userId, cardId])
+  @@index([userId, dueAt])
+}
+
+enum AttemptResult {
+  CORRECT
+  PARTIAL
+  INCORRECT
+}
+
+model Attempt {
+  id         String        @id @default(cuid())
+  userId     String
+  cardId     String
+  userAnswer String        @db.Text
+  result     AttemptResult
+  aiFeedback String?       @db.Text // AI's explanation of what was wrong/right
+  errorTags  String[]      @default([]) // e.g. ["word-order", "case-declension"]
+  createdAt  DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  card Card @relation(fields: [cardId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+// ---------- Conversational tutor sessions ----------
+
+model TutorSession {
+  id        String   @id @default(cuid())
+  userId    String
+  topicId   String?
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  summary   String?  @db.Text // AI-written summary of what was covered / mastered
+
+  user User @relation(fields: [userId], references: [id])
+  messages TutorMessage[]
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+model TutorMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  role      MessageRole
+  content   String      @db.Text
+  createdAt DateTime    @default(now())
+
+  session TutorSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId, createdAt])
+}

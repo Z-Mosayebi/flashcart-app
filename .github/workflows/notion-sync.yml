@@ -1,0 +1,33 @@
+name: Notion sync
+
+# Scheduled auto-sync: pulls the latest content from the connected Notion
+# page(s) every day and regenerates flashcards for anything new/changed.
+# Runs the Python sync script directly (needs its own runtime + secrets),
+# rather than as a Vercel serverless function, since it talks to Postgres
+# and the AI service and can run longer than a typical function timeout.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+  workflow_dispatch: {} # allow manual trigger from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run Notion sync
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_PAGE_IDS: ${{ secrets.NOTION_PAGE_IDS }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AI_SERVICE_URL: ${{ secrets.AI_SERVICE_URL }}
+        run: python scripts/sync_notion.py

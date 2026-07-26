@@ -1,0 +1,29 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+web/.env
+web/.env.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+ai-service/.env
+scripts/.env
+
+# Prisma
+web/prisma/migrations/dev.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
