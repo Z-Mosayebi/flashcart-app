@@ -60,5 +60,8 @@ jobs:
           # DB or the AI service, it just proves the code compiles and typechecks.
           DATABASE_URL: "postgresql://user:password@localhost:5432/flashcart"
           AI_SERVICE_URL: "http://localhost:8000"
+          NEXTAUTH_URL: "http://localhost:3000"
+          NEXTAUTH_SECRET: "ci-placeholder-secret-not-used-anywhere"
+          ENCRYPTION_KEY: "ci-placeholder-encryption-key-32ch"
         run: npm run build
  
