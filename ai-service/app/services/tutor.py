@@ -9,7 +9,7 @@ so grading is delegated to the model with explicit grading criteria.
 """
 
 from app.models.schemas import EvaluateAnswerRequest, EvaluateAnswerResponse
-from app.services.claude_client import ask_json
+from app.services.llm_client import ask_json
 
 SYSTEM_PROMPT = """You are a strict but encouraging German grammar tutor grading a learner's \
 answer to a flashcard. You will be given the card's prompt, the expected/reference answer, the \

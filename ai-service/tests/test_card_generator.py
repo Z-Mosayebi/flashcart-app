@@ -1,5 +1,5 @@
 """Unit test for the card generator's JSON parsing path, using a mocked model
-response so this runs in CI without an ANTHROPIC_API_KEY."""
+response so this runs in CI without a model API key."""
 
 from unittest.mock import patch
 

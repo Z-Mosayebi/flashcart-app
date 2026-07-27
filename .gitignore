@@ -4,6 +4,9 @@ node_modules/
 out/
 web/.env
 web/.env.local
+web/.env*.local
+*.tsbuildinfo
+.vercel
 
 # Python
 __pycache__/

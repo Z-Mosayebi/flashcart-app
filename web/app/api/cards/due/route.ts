@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUserId } from "@/lib/auth";
 
 /**
- * GET /api/cards/due?userId=xxx&limit=10
+ * GET /api/cards/due?limit=10
  * Returns cards due for review right now, ordered by most-overdue first.
  * Cards the user has never seen (no CardProgress row) are included too,
  * treated as immediately due at box 1.
+ *
+ * The user comes from the session, never from a query param.
  */
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get("userId");
-  const limit = Number(req.nextUrl.searchParams.get("limit") ?? 10);
+  const userId = await requireUserId();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  if (!userId) {
-    return NextResponse.json({ error: "userId is required" }, { status: 400 });
-  }
+  const limitParam = Number(req.nextUrl.searchParams.get("limit") ?? 10);
+  const limit = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 10, 1), 50);
 
   const dueProgress = await prisma.cardProgress.findMany({
     where: { userId, dueAt: { lte: new Date() } },
@@ -23,25 +25,37 @@ export async function GET(req: NextRequest) {
   });
 
   let cards = dueProgress.map((p) => ({
-    progressId: p.id,
+    progressId: p.id as string | null,
     box: p.box,
     dueAt: p.dueAt,
     card: p.card,
   }));
 
   if (cards.length < limit) {
-    const seenCardIds = (await prisma.cardProgress.findMany({ where: { userId }, select: { cardId: true } })).map(
-      (p) => p.cardId
-    );
+    const seen = await prisma.cardProgress.findMany({
+      where: { userId },
+      select: { cardId: true },
+    });
+    const seenCardIds = seen.map((p) => p.cardId);
 
+    // Only ever surface cards this user owns.
     const unseen = await prisma.card.findMany({
-      where: { id: { notIn: seenCardIds } },
+      where: {
+        ownerId: userId,
+        ...(seenCardIds.length ? { id: { notIn: seenCardIds } } : {}),
+      },
       take: limit - cards.length,
       include: { topic: true },
+      orderBy: { createdAt: "asc" },
     });
 
     cards = cards.concat(
-      unseen.map((card) => ({ progressId: null as unknown as string, box: 1, dueAt: new Date(), card }))
+      unseen.map((card) => ({
+        progressId: null,
+        box: 1,
+        dueAt: new Date(),
+        card,
+      }))
     );
   }
 

@@ -30,4 +30,6 @@ jobs:
           NOTION_PAGE_IDS: ${{ secrets.NOTION_PAGE_IDS }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AI_SERVICE_URL: ${{ secrets.AI_SERVICE_URL }}
+          # Cards are per-user — this is the account the synced deck belongs to.
+          SYNC_USER_EMAIL: ${{ secrets.SYNC_USER_EMAIL }}
         run: python scripts/sync_notion.py

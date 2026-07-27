@@ -1,12 +1,10 @@
+import { redirect } from "next/navigation";
 import Dashboard from "@/components/Dashboard";
+import { requireUserId } from "@/lib/auth";
 
-const DEMO_USER_ID = process.env.DEMO_USER_ID || "demo-user";
+export default async function DashboardPage() {
+  const userId = await requireUserId();
+  if (!userId) redirect("/signin?callbackUrl=/dashboard");
 
-export default function DashboardPage() {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Your progress</h1>
-      <Dashboard userId={DEMO_USER_ID} />
-    </div>
-  );
+  return <Dashboard />;
 }

@@ -1,9 +1,12 @@
 /**
- * Seed script — converts the actual content from your "DW" Notion page
- * (weswegen relative clauses, Massentourismus vocab gap-fills, the grammar
- * error log, and your own practice sentences) into real flashcards, so the
- * app is demoable immediately without needing a live Notion sync + API key
- * for the reviewer to see it work.
+ * Seed script — loads the starter German deck (weswegen relative clauses,
+ * Massentourismus vocab gap-fills, common error-correction drills and practice
+ * sentences) so a fresh install has content to review immediately, before any
+ * Notion sync is configured.
+ *
+ * Cards are shared content, not per-user: every account reviews the same deck
+ * and gets its own CardProgress rows. No user is created here — accounts come
+ * from sign-up.
  *
  * Run: npm run seed
  */
@@ -12,26 +15,14 @@ import { PrismaClient, CardType } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const DEMO_USER_ID = process.env.DEMO_USER_ID || "demo-user";
-
 async function main() {
-  console.log("Seeding demo user...");
-  const user = await prisma.user.upsert({
-    where: { id: DEMO_USER_ID },
-    update: {},
-    create: { id: DEMO_USER_ID, email: "learner@example.com", name: "Demo Learner" },
-  });
-
-  console.log("Seeding source document...");
-  const sourceDoc = await prisma.sourceDocument.upsert({
-    where: { notionPageId: "3a9cd39eea64802a9b2dfe50e778a117" },
-    update: {},
-    create: {
-      notionPageId: "3a9cd39eea64802a9b2dfe50e778a117",
-      title: "DW",
-      rawMarkdown: "(seeded manually from the live Notion page — see scripts/sync_notion.py for live sync)",
-    },
-  });
+  // The template set is identified by isTemplate = true / ownerId = null.
+  // Re-running would duplicate it, so bail out if it already exists.
+  const existing = await prisma.card.count({ where: { isTemplate: true } });
+  if (existing > 0) {
+    console.log(`Skipping seed: ${existing} template cards already exist.`);
+    return;
+  }
 
   // ---------- Topic: weswegen relative clause ----------
   const weswegenTopic = await prisma.topic.create({
@@ -40,7 +31,7 @@ async function main() {
       description:
         "Connects a subordinate clause to 'der Grund/die Gründe', sending the conjugated verb to the end.",
       pattern: "der Grund/die Gründe + , weswegen + subject + ... + verb (end of clause)",
-      sourceDocumentId: sourceDoc.id,
+      isTemplate: true,
     },
   });
 
@@ -50,7 +41,7 @@ async function main() {
       name: "aus + Dativ ... werden (transformation)",
       description: "'To turn into' / 'to become out of something'. Result noun stays Nominative.",
       pattern: "aus + [Subject in Dativ] + [New Thing in Nominativ] + werden",
-      sourceDocumentId: sourceDoc.id,
+      isTemplate: true,
     },
   });
 
@@ -59,24 +50,25 @@ async function main() {
     data: {
       name: "Reise-Vokabeln (Massentourismus)",
       description: "Travel/tourism vocabulary in context: Massen, Ballermann, Anbindung, Infrastruktur, Badestrand.",
-      sourceDocumentId: sourceDoc.id,
+      isTemplate: true,
     },
   });
 
   // ---------- Topic: common grammar mistakes (error log) ----------
   const errorLogTopic = await prisma.topic.create({
     data: {
-      name: "Häufige Fehler (Session 26.07.2026)",
-      description: "Documented recurring mistakes: verb position, relative pronouns, wissen vs. kennen, prepositions.",
-      sourceDocumentId: sourceDoc.id,
+      name: "Häufige Fehler",
+      description: "Recurring mistakes: verb position, relative pronouns, wissen vs. kennen, prepositions.",
+      isTemplate: true,
     },
   });
 
-  console.log("Seeding cards...");
+  console.log("Seeding starter template cards...");
 
-  await prisma.card.createMany({
-    data: [
-      // --- weswegen: sentence production (your actual practiced sentences) ---
+  // isTemplate is applied to every row below at insert time rather than repeated
+  // on each card, so a new card can't accidentally be added without the flag.
+  const templateCards = [
+      // --- weswegen: sentence production ---
       {
         type: CardType.SENTENCE_PRODUCTION,
         topicId: weswegenTopic.id,
@@ -247,11 +239,16 @@ async function main() {
         explanation: "'es gibt' + Akkusativ is the fixed construction for 'there is/are'.",
         hints: ["es gibt + Akkusativ"],
       },
-    ],
+  ];
+
+  await prisma.card.createMany({
+    data: templateCards.map((card) => ({ ...card, isTemplate: true })),
   });
 
-  const cardCount = await prisma.card.count();
-  console.log(`Seed complete. ${cardCount} cards for user ${user.id}.`);
+  console.log(
+    `Seed complete. ${templateCards.length} starter cards are ready — each new ` +
+      `account gets its own copy on first sign-in.`
+  );
 }
 
 main()

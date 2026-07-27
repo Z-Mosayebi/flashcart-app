@@ -9,7 +9,7 @@ feedback, repeat until sure the user has learned it" loop from the brief.
 """
 
 from app.models.schemas import ChatMessage, TutorChatRequest, TutorChatResponse
-from app.services.claude_client import ask_json
+from app.services.llm_client import ask_json
 
 SYSTEM_PROMPT = """You are a conversational German tutor running a focused practice session on \
 ONE grammar topic with a learner. Your job across the whole conversation:

@@ -13,33 +13,125 @@ datasource db {
 // ---------- Users ----------
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  // Null for OAuth-only accounts; bcrypt hash for credentials sign-in.
+  passwordHash  String?
+  // Interface language ("en" | "de"). Card content is always German.
+  locale        String    @default("en")
+  createdAt     DateTime  @default(now())
 
-  progress     CardProgress[]
-  attempts     Attempt[]
-  tutorSessions TutorSession[]
+  // Set once the starter deck has been copied in, so provisioning runs once.
+  deckProvisionedAt DateTime?
+
+  accounts         Account[]
+  sessions         Session[]
+  progress         CardProgress[]
+  attempts         Attempt[]
+  tutorSessions    TutorSession[]
+  topics           Topic[]
+  cards            Card[]
+  sourceDocuments  SourceDocument[]
+  notionConnection NotionConnection?
+}
+
+// ---------- NextAuth ----------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 // ---------- Source content (from Notion) ----------
 
-// One sync'd Notion page (e.g. "DW"). Keeps a raw snapshot + sync metadata
-// so the sync job can diff what's new since last run.
+// One synced Notion page, owned by the user who connected it. Keeps a raw
+// snapshot + sync metadata so the sync job can diff what's new since last run.
 model SourceDocument {
-  id             String   @id @default(cuid())
-  notionPageId   String   @unique
+  id             String    @id @default(cuid())
+  notionPageId   String
   title          String
-  rawMarkdown    String   @db.Text
-  lastSyncedAt   DateTime @default(now())
+  rawMarkdown    String    @db.Text
+  lastSyncedAt   DateTime  @default(now())
   lastEditedTime DateTime? // Notion's last_edited_time, used for diffing
 
+  // Null only for the shared starter template (see Topic.isTemplate).
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
   topics Topic[]
+
+  // The same Notion page connected by two different users must produce two
+  // independent documents, so uniqueness is per (owner, page) rather than global.
+  @@unique([ownerId, notionPageId])
+  @@index([ownerId])
+}
+
+// A user's connection to their own Notion workspace. The integration token is
+// encrypted at rest (AES-256-GCM, see web/lib/crypto.ts) — it grants read access
+// to the user's Notion pages, so it must never be stored in plaintext.
+model NotionConnection {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  encryptedToken String    @db.Text
+  pageIds        String[]  @default([])
+  lastSyncedAt   DateTime?
+  lastSyncError  String?   @db.Text
+  createdAt      DateTime  @default(now())
+
+  // "oauth" for the one-click flow, "token" for a manually pasted integration
+  // token. Only oauth connections can be re-authorized without user retyping.
+  authType String @default("oauth")
+
+  // Shown in the UI so users can confirm which workspace is connected.
+  workspaceName String?
+  workspaceIcon String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // A grammar topic / pattern extracted from the notes, e.g. "weswegen relative clause",
 // "aus + Dativ ... werden", "Anbindung an + Akkusativ"
+//
+// Topics are per-user. The one exception is the starter template
+// (isTemplate = true, ownerId = null), which is never reviewed directly — it is
+// copied into each new account at signup so everyone begins with content.
 model Topic {
   id          String   @id @default(cuid())
   name        String
@@ -48,10 +140,20 @@ model Topic {
   language    String   @default("de")
   createdAt   DateTime @default(now())
 
-  sourceDocumentId String?
-  sourceDocument   SourceDocument? @relation(fields: [sourceDocumentId], references: [id])
+  ownerId    String?
+  owner      User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  isTemplate Boolean @default(false)
 
-  cards Card[]
+  sourceDocumentId String?
+  sourceDocument   SourceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+
+  cards         Card[]
+  tutorSessions TutorSession[]
+
+  // One topic of a given name per user; the template set is keyed by null owner.
+  @@unique([ownerId, name])
+  @@index([ownerId])
+  @@index([isTemplate])
 }
 
 enum CardType {
@@ -62,6 +164,8 @@ enum CardType {
   VOCAB // simple term <-> meaning
 }
 
+// Cards are per-user, mirroring Topic. Template cards (isTemplate = true,
+// ownerId = null) are the starter deck copied into each new account.
 model Card {
   id          String   @id @default(cuid())
   type        CardType
@@ -73,13 +177,19 @@ model Card {
   createdAt   DateTime @default(now())
   aiGenerated Boolean  @default(true)
 
+  ownerId    String?
+  owner      User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  isTemplate Boolean @default(false)
+
   topicId String
-  topic   Topic  @relation(fields: [topicId], references: [id])
+  topic   Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
   progress CardProgress[]
   attempts Attempt[]
 
   @@index([topicId])
+  @@index([ownerId])
+  @@index([isTemplate])
 }
 
 // ---------- Leitner spaced repetition ----------
@@ -96,8 +206,8 @@ model CardProgress {
   totalCorrect   Int    @default(0)
   aiDifficulty   Float  @default(0.5) // 0 (easy) - 1 (hard), blended into scheduling
 
-  user User @relation(fields: [userId], references: [id])
-  card Card @relation(fields: [cardId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@unique([userId, cardId])
   @@index([userId, dueAt])
@@ -119,8 +229,8 @@ model Attempt {
   errorTags  String[]      @default([]) // e.g. ["word-order", "case-declension"]
   createdAt  DateTime      @default(now())
 
-  user User @relation(fields: [userId], references: [id])
-  card Card @relation(fields: [cardId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }
@@ -128,15 +238,19 @@ model Attempt {
 // ---------- Conversational tutor sessions ----------
 
 model TutorSession {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   topicId   String?
-  startedAt DateTime @default(now())
+  startedAt DateTime  @default(now())
   endedAt   DateTime?
-  summary   String?  @db.Text // AI-written summary of what was covered / mastered
+  mastered  Boolean   @default(false) // set when the tutor declares the pattern mastered
+  summary   String?   @db.Text // AI-written summary of what was covered / mastered
 
-  user User @relation(fields: [userId], references: [id])
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic    Topic?         @relation(fields: [topicId], references: [id], onDelete: SetNull)
   messages TutorMessage[]
+
+  @@index([userId, startedAt])
 }
 
 enum MessageRole {
@@ -151,7 +265,7 @@ model TutorMessage {
   content   String      @db.Text
   createdAt DateTime    @default(now())
 
-  session TutorSession @relation(fields: [sessionId], references: [id])
+  session TutorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
 }

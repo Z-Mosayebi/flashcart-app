@@ -2,6 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-neutral-950 text-neutral-100;
+@layer base {
+  :root {
+    --canvas: 250 250 249;
+    --surface: 255 255 255;
+    --surface-raised: 255 255 255;
+    --line: 231 229 228;
+    --ink: 28 25 23;
+    --ink-muted: 87 83 78;
+    --ink-faint: 168 162 158;
+    --brand: 79 70 229;
+    --brand-soft: 238 242 255;
+    --positive: 5 150 105;
+    --caution: 217 119 6;
+    --critical: 225 29 72;
+  }
+
+  .dark {
+    --canvas: 12 10 9;
+    --surface: 28 25 23;
+    --surface-raised: 41 37 36;
+    --line: 68 64 60;
+    --ink: 250 250 249;
+    --ink-muted: 168 162 158;
+    --ink-faint: 120 113 108;
+    --brand: 129 140 248;
+    --brand-soft: 30 27 75;
+    --positive: 52 211 153;
+    --caution: 251 191 36;
+    --critical: 251 113 133;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Respect users who prefer reduced motion — disable all animation */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Consistent focus ring across the app */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-canvas;
+  }
+}
+
+@layer components {
+  .card-surface {
+    @apply bg-surface border border-line rounded-2xl shadow-card;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3
+           font-medium text-white transition-all duration-200
+           hover:brightness-110 active:scale-[0.98]
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line
+           bg-surface px-5 py-3 font-medium text-ink transition-all duration-200
+           hover:bg-surface-raised active:scale-[0.98]
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-4 py-3 text-ink
+           placeholder:text-ink-faint transition-colors duration-200
+           focus:border-brand;
+  }
+
+  /* Loading skeleton */
+  .skeleton {
+    @apply rounded-lg bg-line;
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--line)) 0%,
+      rgb(var(--surface-raised)) 50%,
+      rgb(var(--line)) 100%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+}
+
+@layer utilities {
+  /* German text in cards gets slightly more breathing room for readability */
+  .text-german {
+    @apply leading-relaxed tracking-[-0.01em];
+  }
+
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
 }

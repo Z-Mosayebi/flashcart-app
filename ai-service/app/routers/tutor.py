@@ -12,7 +12,7 @@ from app.services.tutor_chat import chat_turn
 router = APIRouter()
 
 
-@router.post("/evaluate", response_model=EvaluateAnswerResponse)
+@router.post("/evaluate", response_model=EvaluateAnswerResponse, response_model_by_alias=True)
 def evaluate(req: EvaluateAnswerRequest):
     try:
         return evaluate_answer(req)

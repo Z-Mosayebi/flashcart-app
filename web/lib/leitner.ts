@@ -1,7 +1,7 @@
 /**
  * Leitner-method spaced repetition scheduler, blended with an AI-estimated
- * difficulty score (0 = trivial, 1 = very hard) that the FastAPI service
- * produces from the user's recent answer history (see ai-service/app/services/difficulty.py).
+ * difficulty score (0 = trivial, 1 = very hard) returned alongside each grade
+ * by the FastAPI service (see ai-service/app/services/tutor.py).
  *
  * Classic Leitner: 5 boxes, each with a review interval. Correct answer -> promote
  * one box (or stay at box 5). Incorrect/partial -> demote to box 1.

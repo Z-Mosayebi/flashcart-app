@@ -11,7 +11,7 @@ error log into ERROR_CORRECTION cards.
 """
 
 from app.models.schemas import GeneratedCard, GenerateCardsResponse
-from app.services.claude_client import ask_json
+from app.services.llm_client import ask_json
 
 SYSTEM_PROMPT = """You are a German-language curriculum designer building spaced-repetition \
 flashcards from a language learner's raw study notes (Notion export). The notes mix German \

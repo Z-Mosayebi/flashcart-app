@@ -1,19 +1,22 @@
 """
-Notion -> Flashcart sync job.
+Notion -> Flashcart sync job (batch / scheduled).
 
 Pulls one or more Notion pages via the official Notion API, diffs against
-`SourceDocument.last_edited_time` in Postgres to skip unchanged pages, sends
+`SourceDocument.lastEditedTime` in Postgres to skip unchanged pages, sends
 new/changed page content through the AI service's /generate/cards endpoint,
 and upserts the resulting cards/topics into the DB.
+
+Cards are per-user. This script syncs into ONE nominated account, identified by
+SYNC_USER_EMAIL — useful for keeping your own deck fed on a schedule. Regular
+users connect their own Notion page in-app (Settings -> Your notes), which runs
+the same logic through /api/me/notion/sync.
 
 Run manually:
     python scripts/sync_notion.py
 
-Run on a schedule (recommended for the "step by step, will be add more" requirement
-in the brief — new Notion content becomes new flashcards automatically):
-    - Vercel Cron -> hits a Next.js API route that shells out to this, OR
-    - a simple cron / GitHub Actions scheduled workflow calling this script directly,
-      since it needs NOTION_API_KEY, DATABASE_URL, and AI_SERVICE_URL as secrets.
+Run on a schedule:
+    - a cron / GitHub Actions scheduled workflow calling this script directly,
+      with NOTION_API_KEY, DATABASE_URL, AI_SERVICE_URL and SYNC_USER_EMAIL as secrets.
 
 Requires:
     pip install notion-client psycopg[binary] httpx python-dotenv
@@ -21,6 +24,7 @@ Requires:
     NOTION_PAGE_IDS  - comma-separated list of page IDs/URLs to sync
     DATABASE_URL     - same Postgres the Next.js app uses
     AI_SERVICE_URL   - the FastAPI service, e.g. http://localhost:8000
+    SYNC_USER_EMAIL  - email of the account these cards belong to
 """
 
 from __future__ import annotations
@@ -40,6 +44,7 @@ NOTION_API_KEY = os.environ.get("NOTION_API_KEY")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8000")
 NOTION_PAGE_IDS = [p.strip() for p in os.environ.get("NOTION_PAGE_IDS", "").split(",") if p.strip()]
+SYNC_USER_EMAIL = os.environ.get("SYNC_USER_EMAIL")
 
 
 def require_env():
@@ -49,12 +54,28 @@ def require_env():
             ("NOTION_API_KEY", NOTION_API_KEY),
             ("DATABASE_URL", DATABASE_URL),
             ("NOTION_PAGE_IDS", NOTION_PAGE_IDS or None),
+            ("SYNC_USER_EMAIL", SYNC_USER_EMAIL),
         ]
         if not val
     ]
     if missing:
         print(f"Missing required env vars: {', '.join(missing)}. See scripts/.env.example.")
         sys.exit(1)
+
+
+def resolve_owner_id(conn: psycopg.Connection, email: str) -> str:
+    """Cards must belong to a real account. Fail loudly if it doesn't exist —
+    silently creating one would produce a deck nobody can sign in to."""
+    with conn.cursor() as cur:
+        cur.execute('SELECT id FROM "User" WHERE email = %s', (email.lower(),))
+        row = cur.fetchone()
+    if not row:
+        print(
+            f"No account found for SYNC_USER_EMAIL={email!r}. "
+            "Sign up in the app first, then re-run this sync."
+        )
+        sys.exit(1)
+    return row[0]
 
 
 def fetch_page_markdown(notion: NotionClient, page_id: str) -> tuple[str, str, str]:
@@ -104,59 +125,76 @@ def fetch_page_markdown(notion: NotionClient, page_id: str) -> tuple[str, str, s
     return title, "\n".join(lines), last_edited_time
 
 
-def get_stored_last_edited(conn: psycopg.Connection, notion_page_id: str) -> str | None:
+def get_stored_last_edited(
+    conn: psycopg.Connection, owner_id: str, notion_page_id: str
+) -> str | None:
     with conn.cursor() as cur:
         cur.execute(
-            'SELECT "lastEditedTime" FROM "SourceDocument" WHERE "notionPageId" = %s',
-            (notion_page_id,),
+            'SELECT "lastEditedTime" FROM "SourceDocument" '
+            'WHERE "ownerId" = %s AND "notionPageId" = %s',
+            (owner_id, notion_page_id),
         )
         row = cur.fetchone()
         return row[0].isoformat() if row and row[0] else None
 
 
 def upsert_source_document(
-    conn: psycopg.Connection, notion_page_id: str, title: str, markdown: str, last_edited_time: str
+    conn: psycopg.Connection,
+    owner_id: str,
+    notion_page_id: str,
+    title: str,
+    markdown: str,
+    last_edited_time: str,
 ) -> str:
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO "SourceDocument" (id, "notionPageId", title, "rawMarkdown", "lastSyncedAt", "lastEditedTime")
-            VALUES (gen_random_uuid()::text, %s, %s, %s, now(), %s)
-            ON CONFLICT ("notionPageId") DO UPDATE
+            INSERT INTO "SourceDocument"
+                (id, "notionPageId", title, "rawMarkdown", "lastSyncedAt", "lastEditedTime", "ownerId")
+            VALUES (gen_random_uuid()::text, %s, %s, %s, now(), %s, %s)
+            ON CONFLICT ("ownerId", "notionPageId") DO UPDATE
               SET title = EXCLUDED.title,
                   "rawMarkdown" = EXCLUDED."rawMarkdown",
                   "lastSyncedAt" = now(),
                   "lastEditedTime" = EXCLUDED."lastEditedTime"
             RETURNING id
             """,
-            (notion_page_id, title, markdown, last_edited_time),
+            (notion_page_id, title, markdown, last_edited_time, owner_id),
         )
         return cur.fetchone()[0]
 
 
-def upsert_generated_cards(conn: psycopg.Connection, source_document_id: str, cards: list[dict]):
+def upsert_generated_cards(
+    conn: psycopg.Connection, owner_id: str, source_document_id: str, cards: list[dict]
+):
+    """Inserts cards owned by `owner_id`. Topics are unique per (owner, name),
+    so re-syncing an edited page extends the existing topic rather than cloning
+    it, and cards whose prompt already exists for this user are skipped."""
     with conn.cursor() as cur:
         for card in cards:
             cur.execute(
                 """
-                INSERT INTO "Topic" (id, name, description, pattern, "sourceDocumentId")
-                VALUES (gen_random_uuid()::text, %s, NULL, %s, %s)
-                ON CONFLICT DO NOTHING
+                INSERT INTO "Topic" (id, name, description, pattern, "sourceDocumentId", "ownerId")
+                VALUES (gen_random_uuid()::text, %s, NULL, %s, %s, %s)
+                ON CONFLICT ("ownerId", name) DO UPDATE SET pattern = COALESCE(EXCLUDED.pattern, "Topic".pattern)
                 RETURNING id
                 """,
-                (card["topicName"], card.get("topicPattern"), source_document_id),
+                (card["topicName"], card.get("topicPattern"), source_document_id, owner_id),
             )
-            row = cur.fetchone()
-            if row:
-                topic_id = row[0]
-            else:
-                cur.execute('SELECT id FROM "Topic" WHERE name = %s LIMIT 1', (card["topicName"],))
-                topic_id = cur.fetchone()[0]
+            topic_id = cur.fetchone()[0]
+
+            cur.execute(
+                'SELECT 1 FROM "Card" WHERE "ownerId" = %s AND prompt = %s LIMIT 1',
+                (owner_id, card["prompt"]),
+            )
+            if cur.fetchone():
+                continue
 
             cur.execute(
                 """
-                INSERT INTO "Card" (id, type, prompt, answer, explanation, hints, "sourceText", "topicId", "aiGenerated")
-                VALUES (gen_random_uuid()::text, %s, %s, %s, %s, %s, %s, %s, true)
+                INSERT INTO "Card"
+                    (id, type, prompt, answer, explanation, hints, "sourceText", "topicId", "ownerId", "aiGenerated")
+                VALUES (gen_random_uuid()::text, %s, %s, %s, %s, %s, %s, %s, %s, true)
                 """,
                 (
                     card["type"],
@@ -166,16 +204,17 @@ def upsert_generated_cards(conn: psycopg.Connection, source_document_id: str, ca
                     card.get("hints", []),
                     card.get("sourceText"),
                     topic_id,
+                    owner_id,
                 ),
             )
     conn.commit()
 
 
-def sync_page(notion: NotionClient, conn: psycopg.Connection, page_id: str):
+def sync_page(notion: NotionClient, conn: psycopg.Connection, owner_id: str, page_id: str):
     print(f"Fetching Notion page {page_id}...")
     title, markdown, last_edited_time = fetch_page_markdown(notion, page_id)
 
-    stored = get_stored_last_edited(conn, page_id)
+    stored = get_stored_last_edited(conn, owner_id, page_id)
     if stored == last_edited_time:
         print(f"  '{title}' unchanged since last sync — skipping.")
         return
@@ -190,17 +229,21 @@ def sync_page(notion: NotionClient, conn: psycopg.Connection, page_id: str):
     cards = resp.json()["cards"]
     print(f"  Generated {len(cards)} cards.")
 
-    source_document_id = upsert_source_document(conn, page_id, title, markdown, last_edited_time)
-    upsert_generated_cards(conn, source_document_id, cards)
-    print(f"  Synced '{title}': {len(cards)} cards upserted.")
+    source_document_id = upsert_source_document(
+        conn, owner_id, page_id, title, markdown, last_edited_time
+    )
+    upsert_generated_cards(conn, owner_id, source_document_id, cards)
+    print(f"  Synced '{title}': {len(cards)} cards processed.")
 
 
 def main():
     require_env()
     notion = NotionClient(auth=NOTION_API_KEY)
     with psycopg.connect(DATABASE_URL) as conn:
+        owner_id = resolve_owner_id(conn, SYNC_USER_EMAIL)
+        print(f"Syncing into account {SYNC_USER_EMAIL} ({owner_id}).")
         for page_id in NOTION_PAGE_IDS:
-            sync_page(notion, conn, page_id)
+            sync_page(notion, conn, owner_id, page_id)
     print(f"Sync complete at {datetime.now(timezone.utc).isoformat()}")
 
 

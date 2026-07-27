@@ -58,7 +58,13 @@ class EvaluateAnswerResponse(BaseModel):
 
     result: AttemptResult
     feedback: str
-    error_tags: list[str] = Field(default_factory=list, alias="errorTags")
+    # validation_alias accepts errorTags from the model's JSON; serialization_alias
+    # makes FastAPI emit errorTags back to lib/ai.ts, which expects camelCase.
+    error_tags: list[str] = Field(
+        default_factory=list,
+        validation_alias="errorTags",
+        serialization_alias="errorTags",
+    )
     difficulty: float  # 0..1, fed into the Leitner scheduler blend
 
 

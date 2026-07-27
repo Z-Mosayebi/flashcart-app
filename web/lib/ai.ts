@@ -57,3 +57,25 @@ export interface GeneratedCard {
 export function generateCards(req: GenerateCardsRequest) {
   return post<{ cards: GeneratedCard[] }>("/generate/cards", req);
 }
+
+export interface TutorChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface TutorChatRequest {
+  topicName: string;
+  topicPattern?: string;
+  history: TutorChatMessage[];
+  userMessage: string;
+}
+
+export interface TutorChatResponse {
+  reply: string;
+  /** The tutor sets this once the learner has produced the pattern reliably. */
+  mastered: boolean;
+}
+
+export function tutorChat(req: TutorChatRequest) {
+  return post<TutorChatResponse>("/tutor/chat", req);
+}
