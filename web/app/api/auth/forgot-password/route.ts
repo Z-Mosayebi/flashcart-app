@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createResetToken, resetUrl, RESET_TOKEN_TTL_MINUTES } from "@/lib/password-reset";
+import {
+  createResetToken,
+  recentlyRequested,
+  resetUrl,
+  RESET_TOKEN_TTL_MINUTES,
+} from "@/lib/password-reset";
 import { passwordResetEmail, sendMail } from "@/lib/mail";
 
 /**
@@ -31,7 +36,9 @@ export async function POST(req: NextRequest) {
 
     // Skip OAuth-only accounts too: they have no password to reset, and saying
     // so here would reveal that the address is registered.
-    if (user?.passwordHash) {
+    // Throttled requests fall through to the same neutral response below, so a
+    // caller can't tell a cooldown from an address that was never registered.
+    if (user?.passwordHash && !(await recentlyRequested(user.id))) {
       const token = await createResetToken(user.id);
       const { subject, html, text } = passwordResetEmail(
         resetUrl(token),

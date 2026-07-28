@@ -21,6 +21,28 @@ export function hashResetToken(token: string): string {
 }
 
 /**
+ * How long to wait between reset emails for the same account. Stops someone
+ * flooding a user's inbox by submitting the form repeatedly, and stops the
+ * mail provider's monthly quota being burned by a trivial script.
+ */
+const RESEND_COOLDOWN_MS = 60_000;
+
+/**
+ * True when a link was already sent to this user within the cooldown window.
+ * The caller still responds as though it sent one — telling the client it was
+ * throttled would confirm the address exists.
+ */
+export async function recentlyRequested(userId: string): Promise<boolean> {
+  const latest = await prisma.passwordResetToken.findFirst({
+    where: { userId, usedAt: null },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (!latest) return false;
+  return Date.now() - latest.createdAt.getTime() < RESEND_COOLDOWN_MS;
+}
+
+/**
  * Issues a token for a user and returns the raw value to embed in the email.
  * Any outstanding tokens are invalidated first, so requesting a second link
  * immediately retires the first one.

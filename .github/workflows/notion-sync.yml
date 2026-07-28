@@ -1,15 +1,22 @@
 name: Notion sync
 
-# Scheduled auto-sync: pulls the latest content from the connected Notion
-# page(s) every day and regenerates flashcards for anything new/changed.
-# Runs the Python sync script directly (needs its own runtime + secrets),
-# rather than as a Vercel serverless function, since it talks to Postgres
-# and the AI service and can run longer than a typical function timeout.
+# Batch sync for ONE nominated account (SYNC_USER_EMAIL), kept for operator use.
+#
+# This is not the path users take: they connect their own Notion workspace in
+# Settings -> Your notes and press "Sync now", which runs the same logic through
+# /api/me/notion/sync against their own token. This job can only ever sync the
+# single account its secrets point at.
+#
+# Manual trigger only. The daily schedule was removed because the job has no
+# secrets configured and failed every morning; re-add the `schedule` block below
+# once NOTION_API_KEY, NOTION_PAGE_IDS, DATABASE_URL, AI_SERVICE_URL and
+# SYNC_USER_EMAIL are set in repository secrets.
+#
+#  schedule:
+#    - cron: "0 6 * * *" # daily at 06:00 UTC
 
 on:
-  schedule:
-    - cron: "0 6 * * *" # daily at 06:00 UTC
-  workflow_dispatch: {} # allow manual trigger from the Actions tab
+  workflow_dispatch: {} # run on demand from the Actions tab
 
 jobs:
   sync:
