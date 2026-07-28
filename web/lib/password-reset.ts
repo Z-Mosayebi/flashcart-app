@@ -43,6 +43,36 @@ export async function recentlyRequested(userId: string): Promise<boolean> {
 }
 
 /**
+ * Same cooldown for OAuth accounts, which never get a reset token and so have
+ * nothing for `recentlyRequested` to measure. Recorded in VerificationToken —
+ * NextAuth's own scratch table, already present and cleaned up by expiry — to
+ * avoid a migration for what is only a rate-limit marker.
+ *
+ * Returns true when a notice was already sent inside the window.
+ */
+export async function oauthNoticeThrottled(userId: string): Promise<boolean> {
+  const identifier = `oauth-reset-notice:${userId}`;
+  const now = new Date();
+
+  const existing = await prisma.verificationToken.findFirst({
+    where: { identifier, expires: { gt: now } },
+    select: { token: true },
+  });
+  if (existing) return true;
+
+  // Expired markers for this user are dead weight; clear them as we go.
+  await prisma.verificationToken.deleteMany({ where: { identifier } });
+  await prisma.verificationToken.create({
+    data: {
+      identifier,
+      token: randomBytes(16).toString("base64url"),
+      expires: new Date(now.getTime() + RESEND_COOLDOWN_MS),
+    },
+  });
+  return false;
+}
+
+/**
  * Issues a token for a user and returns the raw value to embed in the email.
  * Any outstanding tokens are invalidated first, so requesting a second link
  * immediately retires the first one.
@@ -85,8 +115,16 @@ export async function findValidResetToken(token: string): Promise<ResetTokenRow 
   return { id: record.id, userId: record.userId };
 }
 
+function appBaseUrl(): string {
+  return (process.env.NEXTAUTH_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
 /** Builds the absolute link that goes in the email. */
 export function resetUrl(token: string): string {
-  const base = (process.env.NEXTAUTH_URL || "http://localhost:3000").replace(/\/$/, "");
-  return `${base}/reset-password?token=${encodeURIComponent(token)}`;
+  return `${appBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+}
+
+/** Sign-in page link, for telling OAuth users where to go instead. */
+export function signInUrl(): string {
+  return `${appBaseUrl()}/signin`;
 }

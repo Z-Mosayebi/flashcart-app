@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   createResetToken,
+  oauthNoticeThrottled,
   recentlyRequested,
   resetUrl,
+  signInUrl,
   RESET_TOKEN_TTL_MINUTES,
 } from "@/lib/password-reset";
-import { passwordResetEmail, sendMail } from "@/lib/mail";
+import { oauthAccountEmail, passwordResetEmail, sendMail } from "@/lib/mail";
 
 /**
  * POST /api/auth/forgot-password — email a reset link.
@@ -31,20 +33,35 @@ export async function POST(req: NextRequest) {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, passwordHash: true },
+      select: {
+        id: true,
+        passwordHash: true,
+        accounts: { select: { provider: true }, take: 1 },
+      },
     });
 
-    // Skip OAuth-only accounts too: they have no password to reset, and saying
-    // so here would reveal that the address is registered.
     // Throttled requests fall through to the same neutral response below, so a
     // caller can't tell a cooldown from an address that was never registered.
-    if (user?.passwordHash && !(await recentlyRequested(user.id))) {
-      const token = await createResetToken(user.id);
-      const { subject, html, text } = passwordResetEmail(
-        resetUrl(token),
-        RESET_TOKEN_TTL_MINUTES
-      );
-      await sendMail({ to: email, subject, html, text });
+    if (user?.passwordHash) {
+      if (!(await recentlyRequested(user.id))) {
+        const token = await createResetToken(user.id);
+        const { subject, html, text } = passwordResetEmail(
+          resetUrl(token),
+          RESET_TOKEN_TTL_MINUTES
+        );
+        await sendMail({ to: email, subject, html, text });
+      }
+    } else if (user?.accounts.length) {
+      // Signs in through a provider, so there is no password to reset. Send a
+      // note pointing at the right button rather than nothing at all: silence
+      // here means waiting for an email that will never arrive.
+      if (!(await oauthNoticeThrottled(user.id))) {
+        const { subject, html, text } = oauthAccountEmail(
+          user.accounts[0].provider,
+          signInUrl()
+        );
+        await sendMail({ to: email, subject, html, text });
+      }
     }
   } catch (err) {
     // A failure here is ours, not the caller's. Log it and still return the

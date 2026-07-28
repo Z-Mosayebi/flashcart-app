@@ -83,6 +83,55 @@ function layout(heading: string, bodyHtml: string): string {
  * Password reset email. `resetUrl` already contains the single-use token, so
  * this text is the only place it ever appears.
  */
+/** Provider ids as stored on Account.provider, in the casing users recognise. */
+const PROVIDER_LABELS: Record<string, string> = {
+  google: "Google",
+  apple: "Apple",
+};
+
+export function providerLabel(provider: string): string {
+  return PROVIDER_LABELS[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+/**
+ * Sent when someone requests a reset for an account that signs in through an
+ * OAuth provider and has no password. Staying silent would leave them waiting
+ * for an email that is never coming — the single most likely support request
+ * this flow can generate — so tell them how to get in instead.
+ */
+export function oauthAccountEmail(provider: string, signInUrl: string) {
+  const label = providerLabel(provider);
+  const subject = "Signing in to Flashcart";
+
+  const html = layout(
+    "Use your " + label + " account",
+    `<p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#57534e;">
+       Someone asked to reset the password for this email address. There's no
+       password to reset here — this account signs in with ${label}, so there
+       was never one to begin with.
+     </p>
+     <a href="${signInUrl}"
+        style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 24px;border-radius:12px;">
+       Sign in with ${label}
+     </a>
+     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#78716c;">
+       Wasn't you? Nothing has changed and your account is safe — you can ignore
+       this email.
+     </p>`
+  );
+
+  const text = `Use your ${label} account
+
+Someone asked to reset the password for this email address. There's no password
+to reset — this account signs in with ${label}.
+
+Sign in here: ${signInUrl}
+
+Wasn't you? Nothing has changed and your account is safe.`;
+
+  return { subject, html, text };
+}
+
 export function passwordResetEmail(resetUrl: string, minutesValid: number) {
   const subject = "Reset your Flashcart password";
 
