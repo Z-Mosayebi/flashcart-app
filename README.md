@@ -1,23 +1,178 @@
-# Flashcart
+<div align="center">
 
-**Learn German you can actually speak.**
+# 🇩🇪 Flashcart
 
-Flashcart turns your own German notes into spoken flashcards and drills you with an
-AI tutor that keeps asking until the grammar sticks — not until you recognise the
-answer, but until you can produce it yourself.
+### Speak German you can actually produce.
 
-- 🔊 **Every card is read aloud** in German, so you train your ear and pronunciation
-  alongside your reading.
-- 📓 **Your notes, your deck.** Connect your own Notion page and it becomes flashcards.
-  Decks are private to your account.
-- 💬 **A tutor, not a quiz.** Answer in your own words. Get real feedback on word
-  order, cases and articles — then a harder question.
-- 📈 **Reviews timed for you.** Spaced repetition that watches how hard you
-  struggled, not just whether you were right.
-- 🌍 **English or German interface**, switchable any time. Card content stays German.
-- 📱 **Works on your phone** — responsive, installable, dark mode included.
+Flashcart turns **your own notes** into spoken flashcards and drills you with an AI tutor
+that keeps asking until the grammar sticks — not until you *recognise* the answer,
+but until you can **produce it yourself**.
 
-## Stack
+<br>
+
+![Flashcart landing page](docs/images/landing.png)
+
+<br>
+
+[![Next.js 14](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.11-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Prisma](https://img.shields.io/badge/Prisma-Postgres-2D3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io)
+[![Runs free](https://img.shields.io/badge/runs-100%25_free_tier-brightgreen?style=flat-square)](#-setup)
+
+**[Getting started](#-using-flashcart)** · **[Setup](#-setup)** · **[Docs](#-documentation)**
+
+</div>
+
+---
+
+## ✨ What makes it different
+
+|  | | |
+| :-- | :-- | :-- |
+| 🔊 | **Every card is spoken** | Hear each prompt in German — train your ear and pronunciation, not just your reading |
+| 📓 | **Your notes, your deck** | Connect Notion and your own notes become flashcards. No authoring session, no generic deck |
+| 💬 | **A tutor, not a quiz** | Answer in free text. Get real feedback on word order, cases and articles — then a harder question |
+| 📈 | **Reviews timed for you** | Spaced repetition that watches *how hard you struggled*, not just whether you were right |
+| 🔒 | **Private by design** | Every deck belongs to one account. Your notes and your mistakes stay yours |
+| 🌍 | **English or German UI** | Switchable any time. Card content always stays German |
+| 📱 | **Built for your phone** | Responsive, installable, dark mode included |
+
+> [!TIP]
+> **Just want to use it?** → [Using Flashcart](#-using-flashcart)
+> **Running it yourself?** → [Setup](#-setup)
+
+## 📖 Contents
+
+- [Using Flashcart](#-using-flashcart) — the user guide, no terminal required
+- [How it works](#-how-it-works) — the loop in one diagram
+- [Stack](#-stack) · [Project layout](#-project-layout)
+- [Setup](#-setup) — run it locally, step by step
+- [Deploying](#-deploying)
+- [Documentation](#-documentation) — architecture, decisions, product requirements
+
+## 🎯 How it works
+
+```mermaid
+flowchart LR
+    A["📓 Your Notion notes"] -->|sync| B["🤖 AI generates cards"]
+    B --> C["🔊 Review — hear it,<br/>type your answer"]
+    C --> D["💬 Graded on meaning,<br/>not string match"]
+    D --> E["📅 Scheduled by how hard<br/>you struggled"]
+    E --> C
+    D -->|weak spots| F["🎓 Tutor drills<br/>the pattern"]
+    F --> C
+```
+
+## 🚀 Using Flashcart
+
+This section is for whoever is *learning* with Flashcart. Nothing here needs a
+terminal.
+
+### 1. Create your account
+
+Open the app and choose **Sign up**. You can register with an email and password, or
+use **Continue with Google** if the deployment has Google sign-in enabled.
+
+The moment you sign in for the first time, Flashcart copies a **starter German deck**
+into your account, so there is something to review before you have connected anything.
+Those cards are now yours — edit or delete them freely, it affects nobody else. Every
+deck in Flashcart is private to one account.
+
+If you registered with email and password and later forget it, use **Forgot password**
+on the sign-in page. You will get a link that is valid for one hour and works once.
+(Accounts created through Google have no password to reset — sign in with Google
+instead; the app tells you so rather than silently sending nothing.)
+
+### 2. Review your due cards — `/review`
+
+**Review** is the core loop, and it is where most of your time goes.
+
+1. A card appears — a fill-in-the-blank, a "build a sentence with this pattern"
+   prompt, a grammar question, or a sentence to correct.
+2. Press ▶︎ to **hear it in German**. You can replay as often as you like, and turn
+   on auto-play in Settings if you want every card spoken automatically.
+3. **Type your answer in your own words.** This is not multiple choice and it is not
+   string matching — German allows real variation, and the tutor grades meaning and
+   grammar, not characters.
+4. You get back a verdict — **correct, partly correct, or incorrect** — plus feedback
+   explaining *what* was wrong: word order, the wrong case, a missing article. Wrong
+   answers are tagged by mistake type so patterns show up later on your dashboard.
+5. Flashcart then schedules when that card comes back.
+
+**When cards come back.** Flashcart uses a five-box Leitner system: get a card right
+and it moves up a box and waits longer (roughly 4 hours → 1 day → 3 days → 1 week →
+3 weeks); get it wrong and it drops back to box 1 and returns the same day. A partly
+correct answer holds its place.
+
+On top of that, the tutor rates how *hard* the answer looked. A card you technically
+got right but visibly struggled with comes back sooner than one you nailed — up to
+about 60% sooner within the same box. So the queue tracks how solid you actually are,
+not just your last yes/no.
+
+When nothing is due, you are done for now. That is the intended feeling — Flashcart
+does not manufacture busywork.
+
+### 3. Drill a grammar pattern — `/tutor`
+
+**Review** covers your whole deck. **Tutor** goes deep on one thing.
+
+Pick a topic — a grammar pattern pulled from your notes, shown with your current
+mastery — and the tutor starts a conversation: it asks, you answer in free text, it
+corrects you and asks again, adjusting difficulty as it goes. It only declares a
+pattern **mastered** after several correct productions in a row that it did not have
+to prompt you through, so mastery means you can produce the form, not that you
+recognised it once.
+
+Sessions are saved, so you can leave and come back.
+
+### 4. Watch your progress — `/dashboard`
+
+The dashboard shows how many cards sit in each Leitner box, your overall mastery
+percentage, your accuracy, your review streak, and a panel of **recent mistakes**
+grouped by error type. That last one is the useful one: if "case declension" keeps
+appearing, that is your next tutor session.
+
+### 5. Bring in your own notes — Settings → Your notes
+
+The starter deck gets you going; your own notes are the point.
+
+1. Go to **Settings → Your notes → Connect Notion**.
+2. Notion's own consent screen opens. Choose which pages Flashcart may read — it
+   never sees anything you did not tick.
+3. Back in Flashcart, select the pages you want turned into cards and press **Sync**.
+
+Flashcart reads those pages, and the AI turns your raw notes — grammar rules, example
+sentences, vocabulary, your own logged mistakes — into structured flashcards, grouped
+under the grammar topics it finds. Cards from your notes are yours alone.
+
+**Adding notes later.** Re-sync any time. Pages you have not edited since the last
+sync are skipped, and cards are de-duplicated, so syncing an expanded page extends
+your deck instead of filling it with near-copies. Your deck grows as your notes do.
+
+*Power users:* if a deployment has no public Notion integration configured, or you
+prefer it, "Use an integration token instead" accepts a Notion integration token
+directly. Either way, your token is encrypted before it is stored.
+
+### 6. Make it yours — `/settings`
+
+- **Interface language** — English or German. Card content stays German either way.
+- **Theme** — light or dark.
+- **Audio auto-play** — off by default; turn it on to hear every card without pressing play.
+- **Notion connection** — connect, re-sync, or disconnect.
+
+### Good to know
+
+- **Audio quality varies by device.** German speech uses your browser's built-in
+  voice — free, offline, no key required. It sounds excellent on iOS, macOS and Edge,
+  more robotic on some Android and Linux setups.
+- **Answer out loud, then type.** The app trains production; saying it before typing
+  is where the speaking practice comes from.
+- **The first review after a quiet spell can be slow** on free hosting, where the AI
+  service sleeps when idle and takes 30–60 seconds to wake. The app retries for you,
+  so it is slow rather than broken.
+
+## 🧱 Stack
 
 - **Web**: Next.js 14 (App Router, TypeScript), Tailwind, Framer Motion, Prisma, Postgres
 - **Auth**: NextAuth — email + password with self-serve password reset, plus
@@ -29,7 +184,7 @@ answer, but until you can produce it yourself.
 - **Sync**: Notion API → GitHub Actions (daily) → AI service → Postgres
 - **Deploy**: Vercel (web) + Render/Fly.io (AI service) + Neon/Supabase (Postgres)
 
-## Project layout
+## 📁 Project layout
 
 ```
 web/            Next.js app — pages, API routes, Prisma schema, UI
@@ -39,7 +194,7 @@ docs/           Architecture notes
 .github/workflows/notion-sync.yml   Scheduled sync job
 ```
 
-## Setup
+## ⚙️ Setup
 
 ### 1. Database
 
@@ -171,14 +326,14 @@ python sync_notion.py
 the script needs to know whose deck to fill. `.github/workflows/notion-sync.yml` runs
 this daily via GitHub Actions; add the same env vars as repository secrets to enable it.
 
-## How decks work
+## 🗂️ How decks work
 
 Cards are **private to each account**. The seeded deck is a template: every new user
 gets their own copy on first sign-in, so they can start reviewing immediately and can
 edit or delete cards without affecting anyone else. Anything you sync from your Notion
 page belongs only to you.
 
-## Audio
+## 🔉 Audio
 
 German audio uses the browser's built-in speech synthesis — free, works offline, and
 needs no API key. Voice quality varies by device: excellent on iOS/macOS and Edge,
@@ -188,7 +343,7 @@ TTS vendor (ElevenLabs, Azure, Google) is a single new class — no component ch
 
 Auto-play is off by default and toggleable in Settings.
 
-## Deploying
+## ☁️ Deploying
 
 **Web (Vercel)** — import the repo, set root directory to `web/`, add the env vars
 from step 3, and set `NEXTAUTH_URL` to your production URL. If you use Google
@@ -212,7 +367,15 @@ first review after a quiet spell is slow. [`web/lib/ai.ts`](web/lib/ai.ts) retri
 once for exactly this reason, which turns a cold start into a slow success rather
 than a visible error.
 
-## Roadmap
+## 📚 Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [docs/PRD.md](docs/PRD.md) | Product requirements — who this is for, what it must do, what is explicitly out of scope, and how success is measured |
+| [docs/ADR.md](docs/ADR.md) | Architecture decision record — the ten significant technical decisions, each with its context, the alternatives rejected, and the consequences |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the running system fits together — request flows, data model, module responsibilities |
+
+## 🗺️ Roadmap
 
 - Billing and subscription tiers
 - Neural TTS upgrade
