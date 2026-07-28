@@ -71,14 +71,20 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.uid = user.id;
       }
-      // Keep locale fresh on the token so the server can render in the
-      // user's language without an extra query on every request.
+      // Keep locale, name and avatar fresh on the token so the server can
+      // render them without an extra query on every request. Read from the DB
+      // rather than trusting what the provider sent at sign-in, so a later
+      // change to the profile shows up on the next request.
       if (token.uid) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.uid as string },
-          select: { locale: true },
+          select: { locale: true, name: true, image: true },
         });
-        if (dbUser) token.locale = dbUser.locale;
+        if (dbUser) {
+          token.locale = dbUser.locale;
+          token.name = dbUser.name;
+          token.picture = dbUser.image;
+        }
       }
       return token;
     },
@@ -86,6 +92,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token.uid) {
         session.user.id = token.uid as string;
         session.user.locale = (token.locale as string) ?? "en";
+        session.user.name = token.name ?? null;
+        session.user.image = (token.picture as string | null) ?? null;
       }
       return session;
     },

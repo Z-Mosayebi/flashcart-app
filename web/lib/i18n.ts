@@ -117,6 +117,31 @@ const en = {
   "auth.error.exists": "An account with that email already exists.",
   "auth.error.generic": "Something went wrong. Please try again.",
   "auth.error.weakPassword": "Password must be at least 8 characters.",
+  "auth.error.server": "We couldn't reach the server. Please try again in a moment.",
+
+  "auth.forgot.link": "Forgot your password?",
+  "auth.forgot.title": "Reset your password",
+  "auth.forgot.subtitle":
+    "Enter your email and we'll send you a link to choose a new password.",
+  "auth.forgot.cta": "Send reset link",
+  "auth.forgot.sent.title": "Check your email",
+  "auth.forgot.sent.body":
+    "If an account exists for {email}, a reset link is on its way. It expires in an hour.",
+  "auth.forgot.back": "Back to sign in",
+
+  "auth.reset.title": "Choose a new password",
+  "auth.reset.subtitle": "Pick something you haven't used here before.",
+  "auth.reset.password": "New password",
+  "auth.reset.confirm": "Confirm new password",
+  "auth.reset.cta": "Save new password",
+  "auth.reset.checking": "Checking your link…",
+  "auth.reset.mismatch": "Those passwords don't match.",
+  "auth.reset.invalid.title": "This link doesn't work",
+  "auth.reset.invalid.body":
+    "It may have expired or already been used. Request a new one to continue.",
+  "auth.reset.invalid.cta": "Request a new link",
+  "auth.reset.done.title": "Password updated",
+  "auth.reset.done.body": "You can now sign in with your new password.",
 
   "notion.title": "Your notes",
   "notion.subtitle":
@@ -268,6 +293,31 @@ const de: Record<TranslationKey, string> = {
   "auth.error.exists": "Mit dieser E-Mail existiert bereits ein Konto.",
   "auth.error.generic": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
   "auth.error.weakPassword": "Das Passwort muss mindestens 8 Zeichen haben.",
+  "auth.error.server": "Der Server war nicht erreichbar. Bitte versuche es gleich noch einmal.",
+
+  "auth.forgot.link": "Passwort vergessen?",
+  "auth.forgot.title": "Passwort zurücksetzen",
+  "auth.forgot.subtitle":
+    "Gib deine E-Mail ein und wir schicken dir einen Link für ein neues Passwort.",
+  "auth.forgot.cta": "Link senden",
+  "auth.forgot.sent.title": "Schau in dein Postfach",
+  "auth.forgot.sent.body":
+    "Falls es ein Konto für {email} gibt, ist ein Link unterwegs. Er gilt eine Stunde.",
+  "auth.forgot.back": "Zurück zur Anmeldung",
+
+  "auth.reset.title": "Neues Passwort wählen",
+  "auth.reset.subtitle": "Nimm eines, das du hier noch nicht verwendet hast.",
+  "auth.reset.password": "Neues Passwort",
+  "auth.reset.confirm": "Neues Passwort bestätigen",
+  "auth.reset.cta": "Passwort speichern",
+  "auth.reset.checking": "Dein Link wird geprüft…",
+  "auth.reset.mismatch": "Die Passwörter stimmen nicht überein.",
+  "auth.reset.invalid.title": "Dieser Link funktioniert nicht",
+  "auth.reset.invalid.body":
+    "Er ist vermutlich abgelaufen oder wurde schon benutzt. Fordere einen neuen an.",
+  "auth.reset.invalid.cta": "Neuen Link anfordern",
+  "auth.reset.done.title": "Passwort aktualisiert",
+  "auth.reset.done.body": "Du kannst dich jetzt mit deinem neuen Passwort anmelden.",
 
   "notion.title": "Deine Notizen",
   "notion.subtitle":

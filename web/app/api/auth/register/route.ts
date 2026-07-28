@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,22 +29,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "weak_password" }, { status: 400 });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return NextResponse.json({ error: "email_taken" }, { status: 409 });
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return NextResponse.json({ error: "email_taken" }, { status: 409 });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: name?.trim() || null,
+        passwordHash,
+        locale,
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    return NextResponse.json({ user }, { status: 201 });
+  } catch (err) {
+    // Two accounts created in the same instant both pass the check above; the
+    // unique constraint is what actually decides, so report that as a taken
+    // email rather than a server error.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      return NextResponse.json({ error: "email_taken" }, { status: 409 });
+    }
+
+    // Anything else — most often the database being unreachable or still
+    // waking from idle — must return JSON. Without this the route throws an
+    // HTML 500 page and the sign-up form can only show a generic message.
+    console.error("[register] Could not create account:", err);
+    return NextResponse.json({ error: "server_error" }, { status: 500 });
   }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name: name?.trim() || null,
-      passwordHash,
-      locale,
-    },
-    select: { id: true, email: true, name: true },
-  });
-
-  return NextResponse.json({ user }, { status: 201 });
 }

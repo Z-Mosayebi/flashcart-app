@@ -1,12 +1,14 @@
 "use client";
 
 import { Suspense } from "react";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { usePreferences, ThemePref } from "@/components/PreferencesProvider";
 import { LOCALES, LOCALE_LABELS, Locale } from "@/lib/i18n";
 import SpeakButton from "@/components/SpeakButton";
 import NotionConnect from "@/components/NotionConnect";
+import UserAvatar from "@/components/UserAvatar";
 
 /** Segmented control used for both language and theme. */
 function Segmented<T extends string>({
@@ -53,10 +55,30 @@ function Segmented<T extends string>({
 export default function SettingsPanel() {
   const { t, locale, setLocale, theme, setTheme, autoPlayAudio, setAutoPlayAudio } =
     usePreferences();
+  const { data: session } = useSession();
 
   return (
     <div className="space-y-6">
       <h1 className="font-display text-3xl font-semibold tracking-tight">{t("settings.title")}</h1>
+
+      {/* Who's signed in — confirms which account the settings below apply to,
+          which matters once someone has both a Google and a password login. */}
+      {session?.user && (
+        <section className="card-surface flex items-center gap-4 p-5 sm:p-6">
+          <UserAvatar
+            name={session.user.name}
+            email={session.user.email}
+            image={session.user.image}
+            size={52}
+          />
+          <div className="min-w-0">
+            {session.user.name && (
+              <p className="truncate font-medium">{session.user.name}</p>
+            )}
+            <p className="truncate text-sm text-ink-muted">{session.user.email}</p>
+          </div>
+        </section>
+      )}
 
       {/* Notion — the content source, so it leads. Suspense because
           NotionConnect reads the ?notion= OAuth result from the URL. */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -53,7 +54,9 @@ export default function AuthForm({
               ? t("auth.error.exists")
               : body.error === "weak_password"
                 ? t("auth.error.weakPassword")
-                : t("auth.error.generic")
+                : body.error === "server_error" || res.status >= 500
+                  ? t("auth.error.server")
+                  : t("auth.error.generic")
           );
           return;
         }
@@ -159,9 +162,19 @@ export default function AuthForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm text-ink-muted" htmlFor="password">
-            {t("auth.password")}
-          </label>
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <label className="block text-sm text-ink-muted" htmlFor="password">
+              {t("auth.password")}
+            </label>
+            {mode === "signin" && (
+              <Link
+                href="/forgot-password"
+                className="text-sm text-ink-muted underline underline-offset-4 hover:text-ink"
+              >
+                {t("auth.forgot.link")}
+              </Link>
+            )}
+          </div>
           <input
             id="password"
             type="password"

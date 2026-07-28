@@ -29,6 +29,7 @@ model User {
 
   accounts         Account[]
   sessions         Session[]
+  resetTokens      PasswordResetToken[]
   progress         CardProgress[]
   attempts         Attempt[]
   tutorSessions    TutorSession[]
@@ -77,6 +78,27 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ---------- Password reset ----------
+
+// A single-use password reset grant. Only the SHA-256 hash of the token is
+// stored: the raw value lives solely in the emailed link, so a database leak
+// can't be replayed to take over accounts.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  // Set the moment the token is spent, so a link can't be replayed even
+  // before it expires.
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // ---------- Source content (from Notion) ----------

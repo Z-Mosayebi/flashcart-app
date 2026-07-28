@@ -20,7 +20,8 @@ answer, but until you can produce it yourself.
 ## Stack
 
 - **Web**: Next.js 14 (App Router, TypeScript), Tailwind, Framer Motion, Prisma, Postgres
-- **Auth**: NextAuth — email + password, with optional Google sign-in
+- **Auth**: NextAuth — email + password with self-serve password reset, plus
+  optional Google sign-in
 - **AI service**: FastAPI (Python), pluggable model provider — Google Gemini
   (free tier, default) or Anthropic Claude
 - **Speech**: Web Speech API (free, on-device), behind a provider interface so a
@@ -85,10 +86,14 @@ cp .env.example .env
 Fill in `.env`:
 - `DATABASE_URL` — from step 1
 - `AI_SERVICE_URL` — `http://localhost:8000` locally
-- `NEXTAUTH_URL` — `http://localhost:3000` locally
+- `NEXTAUTH_URL` — the URL the app actually serves on, e.g. `http://localhost:3000`.
+  If you start the dev server on another port, update this too — NextAuth builds
+  redirects and password-reset links from it
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
 - `ENCRYPTION_KEY` — generate a **second, different** value the same way; encrypts
   users' Notion tokens at rest
+- `RESEND_API_KEY` / `EMAIL_FROM` — optional; sends password-reset emails (see
+  step 5). Leave blank and reset links print to the server console instead
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — optional; leave blank for
   email + password sign-in only
 
@@ -130,7 +135,27 @@ needs the user to create their own integration and share the page via
 Re-syncing skips pages whose Notion `last_edited_time` hasn't changed, so adding notes
 over time only processes what's new instead of regenerating the whole deck.
 
-### 5. Scheduled sync (optional)
+### 5. Password reset email (optional)
+
+Forgot-password links are sent through [Resend](https://resend.com), whose free tier
+covers 3,000 emails/month without a card:
+
+1. Sign up, then create an **API key**.
+2. Put it in `web/.env`:
+   ```
+   RESEND_API_KEY=re_...
+   EMAIL_FROM="Flashcart <onboarding@resend.dev>"
+   ```
+
+`onboarding@resend.dev` is Resend's shared sender and works with no DNS setup, but it
+**only delivers to the address you signed up with** — enough to test the flow. To email
+real users, verify your own domain in Resend and change `EMAIL_FROM` to match.
+
+Leave `RESEND_API_KEY` blank and nothing breaks: the reset link is written to the
+server console instead, which is all you need locally. Reset tokens are stored as
+SHA-256 hashes, expire after an hour, and are single-use.
+
+### 6. Scheduled sync (optional)
 
 To keep one account's deck updating automatically:
 
@@ -169,10 +194,23 @@ Auto-play is off by default and toggleable in Settings.
 from step 3, and set `NEXTAUTH_URL` to your production URL. If you use Google
 sign-in, add `{your-domain}/api/auth/callback/google` as an authorised redirect URI.
 
-**AI service (Render / Fly.io)** — deploy `ai-service/` with `LLM_PROVIDER` and the
-matching API key set,
-and set `ALLOWED_ORIGINS` to your web app's origin so the service isn't open to the
-world. Point the web app's `AI_SERVICE_URL` at the deployed URL.
+**AI service (Render)** — [`render.yaml`](render.yaml) in the repo root is a blueprint,
+so the build and start commands are already defined:
+
+1. At [render.com](https://render.com) → **New** → **Blueprint**, connect this repo.
+   Render finds `render.yaml` and proposes a free `flashcart-ai` service.
+2. It will prompt for the two secrets marked `sync: false`:
+   - `GEMINI_API_KEY` — free key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey),
+     no card required
+   - `ALLOWED_ORIGINS` — your web app's origin, e.g. `https://your-app.vercel.app`,
+     so the service isn't callable by any site on the internet
+3. Deploy, then copy the resulting URL (`https://flashcart-ai-xxxx.onrender.com`)
+   into Vercel as `AI_SERVICE_URL` and redeploy the web app.
+
+Render's free plan sleeps after ~15 minutes idle and takes 30-60s to wake, so the
+first review after a quiet spell is slow. [`web/lib/ai.ts`](web/lib/ai.ts) retries
+once for exactly this reason, which turns a cold start into a slow success rather
+than a visible error.
 
 ## Roadmap
 

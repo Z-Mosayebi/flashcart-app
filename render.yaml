@@ -1,0 +1,32 @@
+# Render blueprint for the Flashcart AI service.
+#
+# Deploys ai-service/ as a free web service. Render reads this automatically
+# when you point it at this repo ("New → Blueprint"), so the build and start
+# commands don't have to be typed into the dashboard by hand.
+#
+# Note the free plan sleeps after ~15 minutes of inactivity; the next request
+# wakes it and takes roughly 30-60 seconds. The web app is written to surface
+# that as a retryable error rather than a crash.
+services:
+  - type: web
+    name: flashcart-ai
+    runtime: python
+    plan: free
+    region: frankfurt # closest to the Neon database (eu-central-1)
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt
+    # $PORT is injected by Render; binding to it (and 0.0.0.0) is required or
+    # the service is marked unhealthy and redeployed in a loop.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_PROVIDER
+        value: gemini
+      # Set in the Render dashboard, not here — this file is committed.
+      - key: GEMINI_API_KEY
+        sync: false
+      # Comma-separated list of sites allowed to call this service.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11"
