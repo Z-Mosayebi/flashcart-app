@@ -4,6 +4,7 @@
  */
 
 const AI_BASE = process.env.AI_SERVICE_URL || "http://localhost:8000";
+const AI_SERVICE_AUTH_TOKEN = process.env.AI_SERVICE_AUTH_TOKEN;
 
 /**
  * Per-attempt timeout. Generous because model calls are genuinely slow, but
@@ -18,9 +19,16 @@ const WAKE_RETRIES = 1;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function attempt<T>(path: string, body: unknown): Promise<T> {
+  if (!AI_SERVICE_AUTH_TOKEN) {
+    throw new Error("AI_SERVICE_AUTH_TOKEN is not configured");
+  }
+
   const res = await fetch(`${AI_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-AI-Service-Token": AI_SERVICE_AUTH_TOKEN,
+    },
     body: JSON.stringify(body),
     cache: "no-store",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

@@ -41,7 +41,7 @@ def test_evaluate_answer_parses_model_output(mock_ask_json):
 
 
 @patch("app.services.tutor.ask_json")
-def test_evaluate_endpoint_emits_camel_case_error_tags(mock_ask_json):
+def test_evaluate_endpoint_emits_camel_case_error_tags(mock_ask_json, monkeypatch):
     """The HTTP layer must emit errorTags, not error_tags — lib/ai.ts depends on it."""
     mock_ask_json.return_value = {
         "result": "INCORRECT",
@@ -50,8 +50,10 @@ def test_evaluate_endpoint_emits_camel_case_error_tags(mock_ask_json):
         "difficulty": 0.9,
     }
 
+    monkeypatch.setenv("AI_SERVICE_AUTH_TOKEN", "test-service-token")
     res = client.post(
         "/tutor/evaluate",
+        headers={"X-AI-Service-Token": "test-service-token"},
         json={
             "cardPrompt": "Ergänze: Ich fahre mit ___ Bus.",
             "expectedAnswer": "dem",

@@ -43,6 +43,7 @@ load_dotenv()
 NOTION_API_KEY = os.environ.get("NOTION_API_KEY")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8000")
+AI_SERVICE_AUTH_TOKEN = os.environ.get("AI_SERVICE_AUTH_TOKEN")
 NOTION_PAGE_IDS = [p.strip() for p in os.environ.get("NOTION_PAGE_IDS", "").split(",") if p.strip()]
 SYNC_USER_EMAIL = os.environ.get("SYNC_USER_EMAIL")
 
@@ -53,6 +54,7 @@ def require_env():
         for name, val in [
             ("NOTION_API_KEY", NOTION_API_KEY),
             ("DATABASE_URL", DATABASE_URL),
+            ("AI_SERVICE_AUTH_TOKEN", AI_SERVICE_AUTH_TOKEN),
             ("NOTION_PAGE_IDS", NOTION_PAGE_IDS or None),
             ("SYNC_USER_EMAIL", SYNC_USER_EMAIL),
         ]
@@ -223,6 +225,7 @@ def sync_page(notion: NotionClient, conn: psycopg.Connection, owner_id: str, pag
     resp = httpx.post(
         f"{AI_SERVICE_URL}/generate/cards",
         json={"rawMarkdown": markdown, "sourceDocumentTitle": title},
+        headers={"X-AI-Service-Token": AI_SERVICE_AUTH_TOKEN},
         timeout=120,
     )
     resp.raise_for_status()

@@ -28,5 +28,9 @@ services:
       # Comma-separated list of sites allowed to call this service.
       - key: ALLOWED_ORIGINS
         sync: false
+      # Shared with the web app and scheduled sync job. Unlike CORS, this
+      # protects direct HTTP requests to the public service.
+      - key: AI_SERVICE_AUTH_TOKEN
+        sync: false
       - key: PYTHON_VERSION
         value: "3.11"

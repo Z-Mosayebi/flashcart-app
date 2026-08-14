@@ -15,7 +15,6 @@ deployable place, talking to the web tier over a small typed HTTP contract.
 """
 
 import os
-
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

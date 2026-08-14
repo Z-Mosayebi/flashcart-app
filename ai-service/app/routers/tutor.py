@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.schemas import (
     EvaluateAnswerRequest,
@@ -6,10 +6,11 @@ from app.models.schemas import (
     TutorChatRequest,
     TutorChatResponse,
 )
+from app.security import require_service_token
 from app.services.tutor import evaluate_answer
 from app.services.tutor_chat import chat_turn
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_service_token)])
 
 
 @router.post("/evaluate", response_model=EvaluateAnswerResponse, response_model_by_alias=True)

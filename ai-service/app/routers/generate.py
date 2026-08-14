@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.schemas import GenerateCardsRequest, GenerateCardsResponse
+from app.security import require_service_token
 from app.services.card_generator import generate_cards_from_notes
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_service_token)])
 
 
 @router.post("/cards", response_model=GenerateCardsResponse)
