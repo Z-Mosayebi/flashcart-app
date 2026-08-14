@@ -1,5 +1,5 @@
 """
-Flashcart AI service.
+Flashcard AI service.
 
 FastAPI microservice holding all model-facing logic for the app:
 
@@ -25,7 +25,7 @@ load_dotenv()
 
 from app.routers import generate, tutor  # noqa: E402  (must follow load_dotenv)
 
-app = FastAPI(title="Flashcart AI Service", version="1.0.0")
+app = FastAPI(title="Flashcard AI Service", version="1.0.0")
 
 # Only the web app should be able to call this service. ALLOWED_ORIGINS is a
 # comma-separated list; it falls back to localhost for development.

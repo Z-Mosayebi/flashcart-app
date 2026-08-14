@@ -64,7 +64,7 @@ export default function NavBar() {
       <header className="sticky top-0 z-40 border-b border-line bg-canvas/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3 sm:px-6">
           <Link href={signedIn ? "/review" : "/"} className="font-display text-lg font-semibold tracking-tight">
-            Flashcart
+            Flashcard
           </Link>
 
           {/* Desktop nav */}

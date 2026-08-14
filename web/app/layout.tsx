@@ -12,11 +12,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Flashcart — Learn German you can actually speak",
+  title: "Flashcard — Learn German you can actually speak",
   description:
     "Spoken German flashcards built from your own notes, with an AI tutor that keeps asking until the grammar sticks. Spaced repetition that adapts to how hard you struggled.",
   openGraph: {
-    title: "Flashcart — Learn German you can actually speak",
+    title: "Flashcard — Learn German you can actually speak",
     description:
       "Spoken flashcards from your own notes, an AI tutor that pushes until you produce the grammar yourself, and reviews timed to how you actually did.",
     type: "website",

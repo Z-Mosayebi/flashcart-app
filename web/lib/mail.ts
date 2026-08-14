@@ -12,7 +12,7 @@
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 /** Resend's shared sender, usable before you've verified your own domain. */
-const DEFAULT_FROM = "Flashcart <onboarding@resend.dev>";
+const DEFAULT_FROM = "Flashcard <onboarding@resend.dev>";
 
 export interface SendMailInput {
   to: string;
@@ -65,13 +65,13 @@ export async function sendMail({ to, subject, html, text }: SendMailInput): Prom
   }
 }
 
-/** Wraps body copy in the minimal shell used by all Flashcart emails. */
+/** Wraps body copy in the minimal shell used by all Flashcard emails. */
 function layout(heading: string, bodyHtml: string): string {
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:24px;background:#fafaf9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1917;">
     <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e5e4;border-radius:16px;padding:32px;">
-      <p style="margin:0 0 24px;font-size:18px;font-weight:600;letter-spacing:-0.01em;">Flashcart</p>
+      <p style="margin:0 0 24px;font-size:18px;font-weight:600;letter-spacing:-0.01em;">Flashcard</p>
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;letter-spacing:-0.02em;">${heading}</h1>
       ${bodyHtml}
     </div>
@@ -101,7 +101,7 @@ export function providerLabel(provider: string): string {
  */
 export function oauthAccountEmail(provider: string, signInUrl: string) {
   const label = providerLabel(provider);
-  const subject = "Signing in to Flashcart";
+  const subject = "Signing in to Flashcard";
 
   const html = layout(
     "Use your " + label + " account",
@@ -133,7 +133,7 @@ Wasn't you? Nothing has changed and your account is safe.`;
 }
 
 export function passwordResetEmail(resetUrl: string, minutesValid: number) {
-  const subject = "Reset your Flashcart password";
+  const subject = "Reset your Flashcard password";
 
   const html = layout(
     "Reset your password",
@@ -154,7 +154,7 @@ export function passwordResetEmail(resetUrl: string, minutesValid: number) {
      </p>`
   );
 
-  const text = `Reset your Flashcart password
+  const text = `Reset your Flashcard password
 
 Open this link to choose a new password. It works once and expires in ${minutesValid} minutes:
 

@@ -145,7 +145,7 @@ const en = {
 
   "notion.title": "Your notes",
   "notion.subtitle":
-    "Connect a Notion page and Flashcart turns it into cards. Sync again any time you add notes — only new content is processed.",
+    "Connect a Notion page and Flashcard turns it into cards. Sync again any time you add notes — only new content is processed.",
   "notion.token": "Notion integration token",
   "notion.tokenHint": "Create one at notion.so/my-integrations, then share your page with it.",
   "notion.pageUrl": "Notion page URL",
@@ -321,7 +321,7 @@ const de: Record<TranslationKey, string> = {
 
   "notion.title": "Deine Notizen",
   "notion.subtitle":
-    "Verbinde eine Notion-Seite und Flashcart macht daraus Karten. Synchronisiere erneut, wenn du Notizen ergänzt — nur Neues wird verarbeitet.",
+    "Verbinde eine Notion-Seite und Flashcard macht daraus Karten. Synchronisiere erneut, wenn du Notizen ergänzt — nur Neues wird verarbeitet.",
   "notion.token": "Notion-Integrations-Token",
   "notion.tokenHint": "Erstelle eines auf notion.so/my-integrations und teile deine Seite damit.",
   "notion.pageUrl": "URL der Notion-Seite",

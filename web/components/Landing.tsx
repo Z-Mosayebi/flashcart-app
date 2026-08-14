@@ -53,7 +53,7 @@ export default function Landing() {
     <div className="-mt-6 sm:-mt-8">
       {/* Header */}
       <header className="flex items-center justify-between py-5">
-        <span className="font-display text-lg font-semibold tracking-tight">Flashcart</span>
+        <span className="font-display text-lg font-semibold tracking-tight">Flashcard</span>
         <div className="flex items-center gap-1">
           {LOCALES.map((l) => (
             <button
