@@ -1,12 +1,12 @@
 /**
  * Symmetric encryption for secrets we must store and later read back —
- * currently users' Notion integration tokens.
+ * currently users' Google refresh tokens.
  *
- * A Notion token grants read access to that user's workspace pages, so it is
- * never written to the database in plaintext. Hashing isn't an option here
- * (unlike passwords) because the sync job needs the original value, so this
- * uses AES-256-GCM: authenticated encryption, meaning tampering with a stored
- * ciphertext is detected at decrypt time rather than silently producing garbage.
+ * A refresh token mints access to that user's Drive, so it is never written to
+ * the database in plaintext. Hashing isn't an option here (unlike passwords)
+ * because an import needs the original value, so this uses AES-256-GCM:
+ * authenticated encryption, meaning tampering with a stored ciphertext is
+ * detected at decrypt time rather than silently producing garbage.
  *
  * Stored format: base64(iv).base64(authTag).base64(ciphertext)
  */

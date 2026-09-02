@@ -31,7 +31,7 @@ but until you can **produce it yourself**.
 |  | | |
 | :-- | :-- | :-- |
 | 🔊 | **Every card is spoken** | Hear each prompt in German — train your ear and pronunciation, not just your reading |
-| 📓 | **Your notes, your deck** | Connect Notion and your own notes become flashcards. No authoring session, no generic deck |
+| 📓 | **Your notes, your deck** | Pick a document from your Google Drive and your own notes become flashcards. No authoring session, no generic deck |
 | 💬 | **A tutor, not a quiz** | Answer in free text. Get real feedback on word order, cases and articles — then a harder question |
 | 📈 | **Reviews timed for you** | Spaced repetition that watches *how hard you struggled*, not just whether you were right |
 | 🔒 | **Private by design** | Every deck belongs to one account. Your notes and your mistakes stay yours |
@@ -55,7 +55,7 @@ but until you can **produce it yourself**.
 
 ```mermaid
 flowchart LR
-    A["📓 Your Notion notes"] -->|sync| B["🤖 AI generates cards"]
+    A["📓 Your notes in<br/>Google Drive"] -->|import| B["🤖 AI generates cards"]
     B --> C["🔊 Review — hear it,<br/>type your answer"]
     C --> D["💬 Graded on meaning,<br/>not string match"]
     D --> E["📅 Scheduled by how hard<br/>you struggled"]
@@ -137,29 +137,38 @@ appearing, that is your next tutor session.
 
 The starter deck gets you going; your own notes are the point.
 
-1. Go to **Settings → Your notes → Connect Notion**.
-2. Notion's own consent screen opens. Choose which pages Flashcart may read — it
-   never sees anything you did not tick.
-3. Back in Flashcart, select the pages you want turned into cards and press **Sync**.
+1. Go to **Settings → Your notes → Choose from Drive**.
+2. Pick the document your German notes live in. Search by name if it is not recent.
+3. Press **Import**.
 
-Flashcart reads those pages, and the AI turns your raw notes — grammar rules, example
-sentences, vocabulary, your own logged mistakes — into structured flashcards, grouped
-under the grammar topics it finds. Cards from your notes are yours alone.
+There is no connection step. Signing in with Google already granted Flashcard
+read-only access to your Drive, so the picker works the moment you get there.
+Flashcard only ever *reads* — it never changes or creates files.
 
-**Adding notes later.** Re-sync any time. Pages you have not edited since the last
-sync are skipped, and cards are de-duplicated, so syncing an expanded page extends
+**What it can read:** Google Docs, Word documents (`.docx`), Google Sheets and
+Excel files. PDFs are not supported yet, and the picker tells you so rather than
+letting you choose one that will fail.
+
+A long document is split on its own headings and imported section by section, so
+you can watch it progress ("12 of 40 sections") and start reviewing the early
+cards before the rest finish. You can close the app — the import keeps going.
+
+**Vocabulary spreadsheets are special.** If your sheet has columns Flashcard
+recognises — a German term and its meaning, optionally an example and a topic —
+it builds cards directly, with no AI involved. That is instant, free, and keeps
+exactly the wording you wrote. It confirms which column is which before importing,
+so a mistaken guess cannot produce a deck of backwards cards.
+
+**Adding notes later.** Import again any time. Documents you have not edited are
+skipped, and cards are de-duplicated, so importing an expanded document extends
 your deck instead of filling it with near-copies. Your deck grows as your notes do.
-
-*Power users:* if a deployment has no public Notion integration configured, or you
-prefer it, "Use an integration token instead" accepts a Notion integration token
-directly. Either way, your token is encrypted before it is stored.
 
 ### 6. Make it yours — `/settings`
 
 - **Interface language** — English or German. Card content stays German either way.
 - **Theme** — light or dark.
 - **Audio auto-play** — off by default; turn it on to hear every card without pressing play.
-- **Notion connection** — connect, re-sync, or disconnect.
+- **Your notes** — add documents, import again, remove them, or revoke Drive access.
 
 ### Good to know
 
@@ -176,12 +185,12 @@ directly. Either way, your token is encrypted before it is stored.
 
 - **Web**: Next.js 14 (App Router, TypeScript), Tailwind, Framer Motion, Prisma, Postgres
 - **Auth**: NextAuth — email + password with self-serve password reset, plus
-  optional Google sign-in
+  Google sign-in, which also grants the read-only Drive access the import uses
 - **AI service**: FastAPI (Python), pluggable model provider — Google Gemini
   (free tier, default) or Anthropic Claude
 - **Speech**: Web Speech API (free, on-device), behind a provider interface so a
   neural TTS vendor can be dropped in later without touching calling code
-- **Sync**: Notion API → GitHub Actions (daily) → AI service → Postgres
+- **Import**: Google Drive API → sectioned per heading → AI service → Postgres
 - **Deploy**: Vercel (web) + Render/Fly.io (AI service) + Neon/Supabase (Postgres)
 
 ## 📁 Project layout
@@ -189,9 +198,8 @@ directly. Either way, your token is encrypted before it is stored.
 ```
 web/            Next.js app — pages, API routes, Prisma schema, UI
 ai-service/     FastAPI service — card generation, grading, tutoring (Python)
-scripts/        Notion sync job (run manually or via GitHub Actions)
+scripts/        try_generate.py — run card generation offline on a downloaded document
 docs/           Architecture notes
-.github/workflows/notion-sync.yml   Scheduled sync job
 ```
 
 ## ⚙️ Setup
@@ -248,11 +256,12 @@ Fill in `.env`:
   redirects and password-reset links from it
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
 - `ENCRYPTION_KEY` — generate a **second, different** value the same way; encrypts
-  users' Notion tokens at rest
+  users' Google refresh tokens at rest
 - `RESEND_API_KEY` / `EMAIL_FROM` — optional; sends password-reset emails (see
   step 5). Leave blank and reset links print to the server console instead
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — optional; leave blank for
-  email + password sign-in only
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — enables Google sign-in *and* the
+  Drive import (see step 4). Leave blank for email + password sign-in only, with
+  importing unavailable
 
 ```bash
 npm install                 # also runs `prisma generate` via postinstall
@@ -263,33 +272,42 @@ npm run dev
 
 Open `http://localhost:3000`, create an account, and start reviewing.
 
-### 4. Notion one-click connect (recommended)
+### 4. Google sign-in and Drive import
 
-So users can connect Notion with a single button instead of creating and pasting an
-integration token, register a **public integration** once:
+One OAuth client covers both signing in and reading a user's notes. Users grant
+Drive access in the same consent screen they use to sign in, so there is no
+separate "connect" step to complete or explain.
 
-1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) →
-   **New integration**.
-2. Set **Type** to **Public**, fill in the required org name / website / privacy
-   URLs, and give it read content capability.
-3. Add the **Redirect URI**: `http://localhost:3000/api/me/notion/oauth/callback`
-   (and your production URL once deployed — Notion allows several).
-4. Copy the **OAuth client ID** and **client secret** into `web/.env`:
+At [console.cloud.google.com](https://console.cloud.google.com):
+
+1. **APIs & Services → Library** — enable the **Google Drive API** and the
+   **Google Sheets API**.
+2. **Credentials → Create credentials → OAuth client ID → Web application**.
+3. Add the **Authorised redirect URI**:
+   `http://localhost:3000/api/auth/callback/google` (and your production URL once
+   deployed).
+4. **OAuth consent screen** — add the scope
+   `https://www.googleapis.com/auth/drive.readonly`.
+5. Copy the client ID and secret into `web/.env`:
    ```
-   NOTION_OAUTH_CLIENT_ID=...
-   NOTION_OAUTH_CLIENT_SECRET=...
+   GOOGLE_CLIENT_ID=...
+   GOOGLE_CLIENT_SECRET=...
    ```
 
-Users then hit **Settings → Your notes → Connect Notion**, choose which pages to
-share on Notion's own consent screen, tick the pages they want in the picker, and
-sync. No token handling on their side.
+**About verification.** `drive.readonly` is a restricted scope, so Google requires
+app verification before it will serve the general public. This matters only for a
+public launch, and it is done **once, by whoever runs the deployment** — your users
+never go through it, they only click Allow.
 
-If these env vars are blank the UI falls back to the manual token flow, which is also
-always available behind "Use an integration token instead" for power users. That path
-needs the user to create their own integration and share the page via
-**⋯ → Connections** on the Notion page itself.
+Until you are verified, add accounts under **Test users** on the consent screen:
+up to 100 of them work fully, with every feature, and no verification. That is
+ample for development and early testers. Unverified apps show an "unverified"
+interstitial that test users can click past.
 
-Re-syncing skips pages whose Notion `last_edited_time` hasn't changed, so adding notes
+Only the refresh token is stored, encrypted with `ENCRYPTION_KEY`. Access tokens are
+minted from it server-side when needed and never persisted or sent to the browser.
+
+Re-importing skips documents whose Drive revision hasn't changed, so adding notes
 over time only processes what's new instead of regenerating the whole deck.
 
 ### 5. Password reset email (optional)
@@ -312,28 +330,27 @@ Leave `RESEND_API_KEY` blank and nothing breaks: the reset link is written to th
 server console instead, which is all you need locally. Reset tokens are stored as
 SHA-256 hashes, expire after an hour, and are single-use.
 
-### 6. Scheduled sync (optional)
+### 6. Trying card generation offline (optional)
 
-To keep one account's deck updating automatically:
+To see what the generator makes of a document without running the web app —
+useful when tuning prompts or checking a new kind of notes:
 
 ```bash
-cd scripts
-cp .env.example .env        # NOTION_API_KEY, NOTION_PAGE_IDS, DATABASE_URL,
-                            # AI_SERVICE_URL, SYNC_USER_EMAIL
-pip install -r requirements.txt
-python sync_notion.py
+# In Google Docs: File -> Download -> Plain text (.txt)
+pip install -r scripts/requirements.txt
+python scripts/try_generate.py notes.txt --dry-run   # sectioning only, no model calls
+python scripts/try_generate.py notes.txt --limit 3   # generate from 3 sections
 ```
 
-`SYNC_USER_EMAIL` must match an account that already exists — decks are per-user, so
-the script needs to know whose deck to fill. `.github/workflows/notion-sync.yml` runs
-this daily via GitHub Actions; add the same env vars as repository secrets to enable it.
+`--dry-run` shows how the document splits and what gets skipped as reference
+material, duplicates or too-short fragments, without spending any quota.
 
 ## 🗂️ How decks work
 
 Cards are **private to each account**. The seeded deck is a template: every new user
 gets their own copy on first sign-in, so they can start reviewing immediately and can
-edit or delete cards without affecting anyone else. Anything you sync from your Notion
-page belongs only to you.
+edit or delete cards without affecting anyone else. Anything you import from your own
+documents belongs only to you.
 
 ## 🔉 Audio
 

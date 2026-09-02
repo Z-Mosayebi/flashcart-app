@@ -36,7 +36,7 @@ model User {
   topics           Topic[]
   cards            Card[]
   sourceDocuments  SourceDocument[]
-  notionConnection NotionConnection?
+  driveConnection  DriveConnection?
 }
 
 // ---------- NextAuth ----------
@@ -101,17 +101,50 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
-// ---------- Source content (from Notion) ----------
+// ---------- Source content ----------
 
-// One synced Notion page, owned by the user who connected it. Keeps a raw
-// snapshot + sync metadata so the sync job can diff what's new since last run.
+// Where a document came from. NOTION is retained only so documents imported
+// before the move to Drive keep their provenance; nothing creates new ones.
+enum SourceProvider {
+  GOOGLE_DRIVE
+  NOTION
+}
+
+// How far along an import is. Importing a long document takes minutes and
+// several model calls, so the state is persisted rather than held in memory:
+// the learner can close the app, and a restarted web tier can resume.
+enum ImportStatus {
+  PENDING
+  IMPORTING
+  COMPLETE
+  FAILED
+}
+
+// One imported document, owned by the user who selected it. Keeps a raw
+// snapshot plus revision metadata so a re-import can skip unchanged documents.
 model SourceDocument {
-  id             String    @id @default(cuid())
-  notionPageId   String
-  title          String
-  rawMarkdown    String    @db.Text
-  lastSyncedAt   DateTime  @default(now())
-  lastEditedTime DateTime? // Notion's last_edited_time, used for diffing
+  id          String         @id @default(cuid())
+  provider    SourceProvider @default(GOOGLE_DRIVE)
+  // Drive file id, or the Notion page id for pre-migration documents.
+  externalId  String
+  title       String
+  rawMarkdown String         @db.Text
+  // Drive's mimeType, so a re-import knows whether to extract prose or rows.
+  mimeType    String?
+
+  lastSyncedAt DateTime @default(now())
+
+  // Change detection. Drive gives both a modified timestamp and an opaque
+  // revision id; the revision id is authoritative because a file's timestamp
+  // can move without its content changing.
+  lastEditedTime DateTime?
+  revisionId     String?
+
+  status      ImportStatus @default(PENDING)
+  // Sections completed / found, so progress is specific rather than a spinner.
+  sectionsDone  Int     @default(0)
+  sectionsTotal Int     @default(0)
+  lastError     String? @db.Text
 
   // Null only for the shared starter template (see Topic.isTemplate).
   ownerId String?
@@ -119,31 +152,32 @@ model SourceDocument {
 
   topics Topic[]
 
-  // The same Notion page connected by two different users must produce two
-  // independent documents, so uniqueness is per (owner, page) rather than global.
-  @@unique([ownerId, notionPageId])
+  // The same document imported by two users must produce two independent
+  // records, so uniqueness is per (owner, provider, document) not global.
+  @@unique([ownerId, provider, externalId])
   @@index([ownerId])
+  @@index([status])
 }
 
-// A user's connection to their own Notion workspace. The integration token is
-// encrypted at rest (AES-256-GCM, see web/lib/crypto.ts) — it grants read access
-// to the user's Notion pages, so it must never be stored in plaintext.
-model NotionConnection {
-  id             String    @id @default(cuid())
-  userId         String    @unique
-  encryptedToken String    @db.Text
-  pageIds        String[]  @default([])
-  lastSyncedAt   DateTime?
-  lastSyncError  String?   @db.Text
-  createdAt      DateTime  @default(now())
+// A user's Google Drive authorization, granted during sign-in rather than by a
+// separate connect step.
+//
+// Only the refresh token is stored, encrypted at rest (AES-256-GCM, see
+// web/lib/crypto.ts): it grants read access to the user's Drive, so it must
+// never be stored in plaintext. Access tokens are short-lived, derived from it
+// server-side on demand, and deliberately not persisted — a stolen row should
+// not hand over a ready-to-use credential.
+model DriveConnection {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  encryptedRefreshToken String   @db.Text
+  // The scopes actually granted. Consent screens let users withhold scopes, so
+  // this records what was given rather than what was asked for.
+  scopes                String[] @default([])
 
-  // "oauth" for the one-click flow, "token" for a manually pasted integration
-  // token. Only oauth connections can be re-authorized without user retyping.
-  authType String @default("oauth")
-
-  // Shown in the UI so users can confirm which workspace is connected.
-  workspaceName String?
-  workspaceIcon String?
+  lastSyncedAt DateTime?
+  lastError    String?   @db.Text
+  createdAt    DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -195,7 +229,7 @@ model Card {
   answer      String   @db.Text // expected answer or reference sentence
   explanation String?  @db.Text // grammar explanation shown after answering
   hints       String[] @default([])
-  sourceText  String?  @db.Text // original sentence/snippet from Notion this card was generated from
+  sourceText  String?  @db.Text // original sentence/snippet this card was generated from
   createdAt   DateTime @default(now())
   aiGenerated Boolean  @default(true)
 

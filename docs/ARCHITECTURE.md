@@ -1,14 +1,16 @@
 # Architecture
 
 ```
-Notion (source notes, grow over time)
-   │  scheduled sync (GitHub Actions, daily)
+Google Drive (source notes, grow over time)
+   │  read-only, authorised during Google sign-in
    ▼
-scripts/sync_notion.py ──────► ai-service (FastAPI) ──────► Postgres
-   │ pulls page markdown           │ /generate/cards            │ SourceDocument
-   │ diffs lastEditedTime          │ Claude parses raw notes     │ Topic
-   └── skips unchanged pages       │ into structured cards       │ Card
-                                   └──────────────────────────────┘
+web/lib/import.ts ───────────► ai-service (FastAPI) ──────► Postgres
+   │ exports document text         │ /generate/cards            │ SourceDocument
+   │ splits on the learner's       │ parses one section         │ Topic
+   │   own headings                │ into structured cards      │ Card
+   │ diffs Drive revisionId        └──────────────────────────────┘
+   └── skips unchanged documents
+       (spreadsheets skip the model entirely — see below)
 
 Next.js app (Vercel)
    │
@@ -74,11 +76,17 @@ learner's progress by changing one query parameter.
 
 ## The four AI capabilities
 
-1. **Card generation** (`ai-service/app/services/card_generator.py`) — reads a whole
-   raw Notion page (grammar rules, example sentences, vocab drills, error
-   annotations) and produces a structured, typed set of flashcards, clustering
+1. **Card generation** (`ai-service/app/services/card_generator.py`) — reads one
+   section of a learner's notes (grammar rules, example sentences, vocab drills,
+   error annotations) and produces a structured, typed set of flashcards, clustering
    related content under shared grammar topics. This is what lets the deck grow as
    notes are added, instead of hand-authoring every card.
+
+   It takes a *section*, not a document. A real notes document runs to ~100k
+   characters, which no single call can handle inside a request timeout, and which
+   produces shallow cards even when it fits. `web/lib/sectioner.ts` (mirrored by
+   `ai-service/app/services/sectioner.py`) splits on the learner's own headings
+   first, so generated topics follow how they already organise their study.
 
 2. **Tutoring evaluation** (`ai-service/app/services/tutor.py`) — grades free-text
    answers holistically rather than by string match (German allows real variation),
@@ -112,7 +120,7 @@ TTS backend is a drop-in replacement.
 
 See `web/prisma/schema.prisma`. Key relationships:
 
-- `SourceDocument` (one per synced Notion page) → `Topic` (grammar pattern) → `Card`
+- `SourceDocument` (one per imported document) → `Topic` (grammar pattern) → `Card`
 - `User` → `Account`/`Session` (NextAuth), plus `locale` for interface language
 - `CardProgress` — one row per (user, card): Leitner box, due date, AI difficulty
 - `Attempt` — every answer, with AI feedback and error tags (powers the dashboard's
@@ -140,38 +148,69 @@ Provisioning is hooked into NextAuth's `signIn` event rather than the register r
 so it covers Google sign-up too, where no register call happens. Failures are logged
 but never block sign-in.
 
-## Notion connections
+## Drive access and importing
 
-Users connect their own Notion workspace in Settings, via one of two paths:
+There is no "connect" step. `GoogleProvider` in `web/lib/auth.ts` requests
+`drive.readonly` alongside the identity scopes, so the consent a user passes to sign
+in is the same one that authorises importing. Removing that step is the point of the
+Drive migration: under the previous Notion flow, four separate actions stood between
+having notes and having a deck, and each was a place to give up.
 
-1. **OAuth (default)** — `/api/me/notion/oauth/start` redirects to Notion's consent
-   screen, where the user selects which pages to share; the callback exchanges the code
-   for an access token. This is the path regular users get: one click, no token
-   handling. It requires a public integration registered with Notion
-   (`NOTION_OAUTH_CLIENT_ID`/`_SECRET`); when those are unset the UI hides it.
-2. **Manual integration token** — kept as a fallback and a power-user option, and the
-   only path when OAuth isn't configured.
+Only the **refresh token** is stored, encrypted at rest with AES-256-GCM
+(`web/lib/crypto.ts`). Access tokens are minted from it server-side on demand and
+never persisted or exposed to the browser, so a leaked row does not hand over a
+credential that works immediately. `access_type=offline` and `prompt=consent` are both
+required: without them Google issues no refresh token on a repeat sign-in, and access
+would silently expire after an hour with no way to renew it.
 
-The `state` parameter is a random value stored in an httpOnly cookie and compared on
-callback, so a forged redirect can't attach someone else's Notion workspace to the
-signed-in account.
+Granted scopes are recorded rather than assumed, because a consent screen lets a user
+sign in while declining Drive. That distinction lets the UI tell "never granted" from
+"granted then revoked" — different situations with the same remedy but different
+wording.
 
-After connecting, `/api/me/notion/pages` lists what the token can actually see (via
-Notion's search endpoint) and the user ticks pages from a list — no URL pasting, and no
-way to select a page the integration can't read.
+`drive.readonly` is a **restricted scope**: Google requires app verification before
+serving the general public, done once by whoever runs the deployment. Up to 100 test
+users work fully without it, so verification gates launch, not development.
 
-Either way the token is stored encrypted at rest with AES-256-GCM
-(`web/lib/crypto.ts`) — it grants read access to that user's pages, so plaintext
-storage would turn a database leak into a workspace breach. Hashing isn't an option
-here, unlike passwords, because the sync job needs the original value back. GCM is
-authenticated, so a tampered ciphertext fails loudly at decrypt time instead of
-silently yielding garbage.
+### The import pipeline
 
-`POST /api/me/notion/sync` fetches the user's pages, skips any whose Notion
-`last_edited_time` matches the previous sync, and generates cards owned by that user.
+`POST /api/me/drive/import` runs `importDocument()` per selected file:
+
+1. **Diff.** Drive's `headRevisionId` is compared against the stored one. It changes
+   only when content does, unlike `modifiedTime`, which moves when a file is merely
+   opened or re-shared — using the timestamp would regenerate untouched decks daily.
+2. **Extract.** Prose is exported as text; spreadsheets are read as rows.
+3. **Split.** Prose is sectioned on headings. Reference material (an A–Z vocabulary
+   index), too-short fragments and duplicate sections are skipped *and reported*,
+   so an import can say what it did with every part of a document.
+4. **Generate.** One model call per section, with cards written as each finishes.
+5. **Track.** `sectionsDone`/`sectionsTotal` are persisted per section, so progress is
+   specific, survives a restart, and the learner can close the app mid-import.
+
+A single failed section is recorded and skipped rather than discarding a long
+document; every section failing is treated as systemic (an outage or exhausted quota)
+and surfaced as an error rather than reported as a successful import of nothing.
+
+On failure the revision id is deliberately left unwritten, so the next attempt sees
+the document as changed and retries instead of treating a half-import as current.
+
 Topics are unique per `(ownerId, name)` and cards are de-duplicated on prompt, so
-re-syncing an edited page extends the existing deck rather than piling up near-copies.
+re-importing an edited document extends the existing deck rather than piling up
+near-copies.
 
-`scripts/sync_notion.py` remains for scheduled batch syncing into a single nominated
-account, identified by `SYNC_USER_EMAIL`. It exits with an error if no such account
-exists, rather than creating a deck nobody can sign in to.
+### Spreadsheets skip the model
+
+A vocabulary sheet is already a deck: the learner has done the work of pairing a term
+with its meaning. `web/lib/spreadsheet-cards.ts` detects column roles from the header
+row (in English, German or Persian) and maps rows directly to cards — instant, free,
+and faithful to the wording the learner chose. Detection is surfaced for confirmation
+because a wrong guess about which column holds the answer produces a deck of backwards
+cards. A sheet with no recognisable layout falls back to model generation, so
+detection failing never means the import fails.
+
+### Documents imported before the migration
+
+`SourceDocument.provider` retains a `NOTION` value so pre-migration documents keep
+their cards and their provenance. They are listed as read-only: reviewable, but not
+re-importable, since the connection that fetched them no longer exists.
+

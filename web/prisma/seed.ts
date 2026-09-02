@@ -2,7 +2,7 @@
  * Seed script — loads the starter German deck (weswegen relative clauses,
  * Massentourismus vocab gap-fills, common error-correction drills and practice
  * sentences) so a fresh install has content to review immediately, before any
- * Notion sync is configured.
+ * a document has been imported.
  *
  * Cards are shared content, not per-user: every account reviews the same deck
  * and gets its own CardProgress rows. No user is created here — accounts come

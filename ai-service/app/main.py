@@ -3,7 +3,7 @@ Flashcard AI service.
 
 FastAPI microservice holding all model-facing logic for the app:
 
-  1. /generate/cards   — parse raw Notion grammar notes into structured flashcards
+  1. /generate/cards   — parse raw grammar notes into structured flashcards
   2. /tutor/evaluate    — grade a free-text German answer against a target pattern,
                           give natural-language feedback, and estimate difficulty
                           for the Leitner scheduler
