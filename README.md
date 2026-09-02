@@ -336,7 +336,50 @@ Leave `RESEND_API_KEY` blank and nothing breaks: the reset link is written to th
 server console instead, which is all you need locally. Reset tokens are stored as
 SHA-256 hashes, expire after an hour, and are single-use.
 
-### 6. Trying card generation offline (optional)
+### 6. Database backups and rolling back a migration
+
+Take a full backup before any migration. It needs no Postgres tooling
+installed — it runs through Prisma:
+
+```bash
+node scripts/backup_db.mjs              # writes backups/<timestamp>.sql
+```
+
+The file is a single transaction of `DELETE` + `INSERT` statements, so
+restoring returns the database to exactly that snapshot rather than merging
+into it:
+
+```bash
+psql "$DATABASE_URL" -f backups/<timestamp>.sql
+```
+
+Backups are gitignored — they contain user emails and encrypted tokens.
+
+**Rehearsing a migration.** Before applying one to a database with real data,
+run it and its reverse against that database inside a transaction that always
+rolls back:
+
+```bash
+node scripts/verify_migration.mjs
+```
+
+It checks the schema after the forward migration, applies `down.sql`, checks
+the schema is back, confirms no study data was lost either way, and then
+discards everything. The database is unchanged whatever the outcome.
+
+**Rolling back.** Prisma has no `migrate down`, so the reverse is applied by
+hand:
+
+```bash
+psql "$DATABASE_URL" -f web/prisma/migrations/20260902000000_drive_import/down.sql
+```
+
+That restores the previous schema and marks the migration unapplied, so
+`prisma migrate deploy` will run it again afterwards. Topics and cards survive
+a rollback; documents that could not exist in the old schema do not. Restore a
+backup instead when the data matters more than the schema.
+
+### 7. Trying card generation offline (optional)
 
 To see what the generator makes of a document without running the web app —
 useful when tuning prompts or checking a new kind of notes:
