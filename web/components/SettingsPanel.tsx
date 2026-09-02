@@ -1,13 +1,12 @@
 "use client";
 
-import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { usePreferences, ThemePref } from "@/components/PreferencesProvider";
 import { LOCALES, LOCALE_LABELS, Locale } from "@/lib/i18n";
 import SpeakButton from "@/components/SpeakButton";
-import NotionConnect from "@/components/NotionConnect";
+import DriveConnect from "@/components/DriveConnect";
 import UserAvatar from "@/components/UserAvatar";
 
 /** Segmented control used for both language and theme. */
@@ -80,11 +79,10 @@ export default function SettingsPanel() {
         </section>
       )}
 
-      {/* Notion — the content source, so it leads. Suspense because
-          NotionConnect reads the ?notion= OAuth result from the URL. */}
-      <Suspense fallback={<div className="skeleton h-56 w-full" />}>
-        <NotionConnect />
-      </Suspense>
+      {/* Drive — the content source, so it leads. */}
+      <section className="card-surface p-5 sm:p-6">
+        <DriveConnect />
+      </section>
 
       {/* Interface language */}
       <section className="card-surface p-5 sm:p-6">

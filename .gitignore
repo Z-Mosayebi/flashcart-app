@@ -30,3 +30,6 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Database backups — may contain personal data and secrets
+backups/

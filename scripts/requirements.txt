@@ -1,4 +1,6 @@
-notion-client==2.2.1
-psycopg[binary]==3.2.1
-httpx==0.27.2
-python-dotenv==1.0.1
+# Dependencies for scripts/try_generate.py, which runs the card-generation
+# pipeline offline against a downloaded notes document.
+#
+# The script imports the AI service's own modules, so install this alongside
+# ai-service/requirements.txt rather than instead of it.
+python-dotenv>=1.0.1

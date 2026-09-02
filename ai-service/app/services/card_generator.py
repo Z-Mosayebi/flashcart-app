@@ -1,7 +1,10 @@
 """
-Turns raw grammar notes (as pasted straight from Notion, including the
-Persian-language error annotations, toggle sections, vocab gap-fills, etc.)
-into structured Leitner-ready flashcards.
+Turns raw grammar notes (one section of a learner's own document, including
+Persian-language error annotations, vocab gap-fills, etc.) into structured
+Leitner-ready flashcards.
+
+Input is one section rather than a whole document: see sectioner.py, which
+splits on the learner's own headings before anything reaches this module.
 
 This is the "generate cards from raw notes" capability: instead of hand-authoring
 cards, the model reads a whole page of loosely structured study notes and produces
@@ -14,7 +17,7 @@ from app.models.schemas import GeneratedCard, GenerateCardsResponse
 from app.services.llm_client import ask_json
 
 SYSTEM_PROMPT = """You are a German-language curriculum designer building spaced-repetition \
-flashcards from a language learner's raw study notes (Notion export). The notes mix German \
+flashcards from a language learner's raw study notes. The notes mix German \
 grammar explanations, example sentences, vocabulary gap-fill drills, and a running log of the \
 learner's own mistakes (sometimes annotated in Persian/Farsi since the learner is a Persian \
 speaker learning German).

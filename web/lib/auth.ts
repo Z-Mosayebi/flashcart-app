@@ -7,6 +7,8 @@ import { getServerSession } from "next-auth";
 import type { Adapter } from "next-auth/adapters";
 import { prisma } from "@/lib/prisma";
 import { provisionStarterDeck } from "@/lib/provisioning";
+import { DRIVE_SCOPE } from "@/lib/google-drive";
+import { encryptSecret } from "@/lib/crypto";
 
 const googleId = process.env.GOOGLE_CLIENT_ID;
 const googleSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -26,7 +28,27 @@ export const authOptions: NextAuthOptions = {
     // Google is optional — only registered when credentials are configured,
     // so a deployment without them still boots instead of throwing at startup.
     ...(googleId && googleSecret
-      ? [GoogleProvider({ clientId: googleId, clientSecret: googleSecret })]
+      ? [
+          GoogleProvider({
+            clientId: googleId,
+            clientSecret: googleSecret,
+            authorization: {
+              params: {
+                // Drive access is requested here, in the sign-in consent, rather
+                // than behind a separate "connect" step. That is the whole point
+                // of the Drive migration: by the time a learner reaches the
+                // document picker, the app can already read their Drive.
+                scope: `openid email profile ${DRIVE_SCOPE}`,
+                // A refresh token is only issued with offline access, and only
+                // on the *first* consent unless prompt=consent forces it. Without
+                // both, a returning user grants access that expires in an hour
+                // and cannot be renewed.
+                access_type: "offline",
+                prompt: "consent",
+              },
+            },
+          }),
+        ]
       : []),
     CredentialsProvider({
       name: "Email and password",
@@ -56,13 +78,26 @@ export const authOptions: NextAuthOptions = {
      * the register route so it covers Google sign-up too, where no register
      * call ever happens. It's a no-op after the first run.
      */
-    async signIn({ user }) {
+    async signIn({ user, account }) {
       if (!user?.id) return;
+
       try {
         await provisionStarterDeck(user.id);
       } catch (err) {
-        // Never block sign-in over this — the user can still connect Notion.
+        // Never block sign-in over this — an empty deck is a bad first
+        // impression, a failed login is worse.
         console.error("Starter deck provisioning failed", err);
+      }
+
+      if (account?.provider === "google") {
+        try {
+          await storeDriveGrant(user.id, account);
+        } catch (err) {
+          // Sign-in must succeed even when Drive access does not. The user
+          // lands signed in, and Settings shows importing as unavailable with
+          // a way to grant it, rather than the login failing outright.
+          console.error("Storing Drive access failed", err);
+        }
       }
     },
   },
@@ -100,6 +135,45 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
+
+/**
+ * Persists the Drive half of a Google sign-in.
+ *
+ * Only the refresh token is kept, and only when Google actually issued one —
+ * it is absent on a repeat consent, and overwriting a good stored token with
+ * nothing would silently break importing for a returning user.
+ *
+ * The granted scopes are recorded rather than assumed: a consent screen lets
+ * users untick Drive while still signing in, and the UI has to be able to tell
+ * "never granted" from "granted then revoked".
+ */
+async function storeDriveGrant(
+  userId: string,
+  account: { refresh_token?: string | null; scope?: string | null }
+): Promise<void> {
+  const scopes = (account.scope ?? "").split(" ").filter(Boolean);
+
+  if (!scopes.includes(DRIVE_SCOPE)) {
+    // Signed in without granting Drive. Any previously stored grant is stale.
+    await prisma.driveConnection.deleteMany({ where: { userId } });
+    return;
+  }
+
+  if (!account.refresh_token) {
+    // Drive was granted but no new refresh token came back, which means one was
+    // issued earlier. Refresh the recorded scopes and keep the stored token.
+    await prisma.driveConnection.updateMany({ where: { userId }, data: { scopes } });
+    return;
+  }
+
+  const encryptedRefreshToken = encryptSecret(account.refresh_token);
+
+  await prisma.driveConnection.upsert({
+    where: { userId },
+    create: { userId, encryptedRefreshToken, scopes },
+    update: { encryptedRefreshToken, scopes, lastError: null },
+  });
+}
 
 /** Server-side session accessor used by route handlers and server components. */
 export function auth() {

@@ -34,7 +34,7 @@ export async function provisionStarterDeck(userId: string): Promise<number> {
 
   if (templateTopics.length === 0) {
     // Nothing seeded yet. Mark as provisioned anyway so we don't re-query on
-    // every request; the user can still connect Notion to get content.
+    // every request; the user can still import a document to get content.
     await prisma.user.update({
       where: { id: userId },
       data: { deckProvisionedAt: new Date() },
