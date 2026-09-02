@@ -121,14 +121,21 @@ export function detectColumns(rows: string[][]): SheetDetection {
       header: (nonEmpty[0][i] ?? "").trim(),
       role: roleForHeader(nonEmpty[0][i] ?? ""),
     }));
+  } else if (width === 2) {
+    // No header to read. The two-column convention (term, then meaning) is
+    // near-universal for vocabulary lists, so it is worth guessing — but only
+    // at exactly two columns. A wider sheet with no recognisable headers is
+    // more likely to be notes than a vocabulary list, and guessing there would
+    // silently turn arbitrary text into backwards cards.
+    columns = [
+      { index: 0, header: "Column 1", role: "term" },
+      { index: 1, header: "Column 2", role: "meaning" },
+    ];
   } else {
-    // No header to read, so fall back to the near-universal convention of a
-    // two-column vocabulary list: term first, meaning second. Presented for
-    // confirmation like any other guess.
     columns = Array.from({ length: width }, (_, i) => ({
       index: i,
       header: `Column ${i + 1}`,
-      role: (i === 0 ? "term" : i === 1 ? "meaning" : "ignore") as ColumnRole,
+      role: "ignore" as ColumnRole,
     }));
   }
 
@@ -213,14 +220,16 @@ export function buildCardsFromRows(
 
     // An example sentence supports a cloze card, which is the only one of the
     // three that tests the word in context.
-    if (example && example.toLowerCase().includes(term.toLowerCase())) {
-      const blanked = example.replace(new RegExp(escapeRegExp(term), "i"), "_____");
+    const blanked = blankTermIn(example, term);
+    if (blanked) {
       cards.push({
         type: "CLOZE",
         topicName,
-        prompt: `Fill in the blank: ${blanked}`,
-        answer: term,
-        explanation: `"${term}" means "${meaning}".`,
+        prompt: `Fill in the blank: ${blanked.sentence}`,
+        // The answer is the form actually used in the sentence, not the
+        // dictionary form — that is what the learner has to produce here.
+        answer: blanked.matched,
+        explanation: `From "${term}" — "${meaning}".`,
         hints: [],
         sourceText: example,
       });
@@ -232,6 +241,52 @@ export function buildCardsFromRows(
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+interface BlankedExample {
+  /** The example with the term replaced by a blank. */
+  sentence: string;
+  /** The exact word form that was removed, which becomes the answer. */
+  matched: string;
+}
+
+/**
+ * Blanks out a term in its example sentence.
+ *
+ * Matching the term exactly is not enough, and failing to notice that would
+ * quietly cost most rows their cloze card: notes list verbs as infinitives
+ * ("fehlen") but use them conjugated in examples ("Fehlt dir etwas?"), and
+ * nouns appear with articles and case endings.
+ *
+ * German inflection is suffixal, so the term's stem is matched instead, and
+ * the answer becomes the inflected form actually present — which is the form
+ * the learner needs to produce in that sentence anyway.
+ *
+ * Returns null when no form of the term appears, rather than guessing.
+ */
+function blankTermIn(example: string, term: string): BlankedExample | null {
+  if (!example || !term) return null;
+
+  // Multi-word terms ("in Verlegenheit geraten") and parenthesised annotations
+  // ("auffallen (+ Dativ)") are matched on their first *significant* word —
+  // skipping the articles, prepositions and reflexive pronouns that vocabulary
+  // lists put in front of the word actually being learned.
+  const head = term
+    .replace(/\([^)]*\)/g, " ")
+    .trim()
+    .split(/\s+/)
+    .find((word) => word.length >= 4);
+  if (!head) return null;
+
+  // Trimming two characters covers the common endings while keeping the stem
+  // specific enough not to match an unrelated word.
+  const stem = head.slice(0, Math.max(4, head.length - 2));
+  const pattern = new RegExp(`\\b${escapeRegExp(stem)}\\w*`, "i");
+
+  const match = example.match(pattern);
+  if (!match) return null;
+
+  return { sentence: example.replace(pattern, "_____"), matched: match[0] };
 }
 
 /**

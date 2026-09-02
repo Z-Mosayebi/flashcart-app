@@ -52,6 +52,12 @@ jobs:
  
       - name: Lint
         run: npm run lint
+
+      # Unit tests for the pure logic modules — sectioning and the spreadsheet
+      # mapper. The mapper especially: it has no model downstream to absorb a
+      # mistake, so a bad column guess would ship a deck of backwards cards.
+      - name: Test
+        run: npm test
  
       - name: Build
         env:

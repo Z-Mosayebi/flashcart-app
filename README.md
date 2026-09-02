@@ -272,6 +272,12 @@ npm run dev
 
 Open `http://localhost:3000`, create an account, and start reviewing.
 
+Tests (no database or network needed — these cover the pure logic modules,
+document sectioning and the spreadsheet mapper):
+```bash
+npm test
+```
+
 ### 4. Google sign-in and Drive import
 
 One OAuth client covers both signing in and reading a user's notes. Users grant

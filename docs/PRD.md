@@ -385,8 +385,8 @@ before the import that v2 does not have.
 | **Scale of input** | A single document of ~100k characters (roughly 40 sections) must import successfully. This is the observed size of a real learner's notes, not a theoretical ceiling. |
 | **Portability** | Model vendor is swappable by environment variable. Speech backend is swappable by implementing one interface. The document source is behind an extraction interface, so adding a source is adding an implementation. |
 | **Compatibility** | Modern browsers; responsive down to phone widths; dark mode. Speech quality is device-dependent and must be disclosed rather than hidden. |
-| **Quality gates** | CI runs on every push and PR: Python tests with mocked model calls, plus lint and a full type-checked build of the web app. Red CI means main is not deployable. |
-| **Testability** | The entire model-facing surface is testable without an API key or spend. Drive extraction is testable against fixture files without network access. |
+| **Quality gates** | CI runs on every push and PR: Python tests with mocked model calls, web unit tests for the pure logic modules, plus lint and a full type-checked build. Red CI means main is not deployable. |
+| **Testability** | The entire model-facing surface is testable without an API key or spend. Sectioning and spreadsheet mapping are pure functions, tested without a database, a network or a model. |
 
 ---
 
