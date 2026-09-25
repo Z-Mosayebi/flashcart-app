@@ -11,8 +11,6 @@ interface Card {
   id: string;
   type: string;
   prompt: string;
-  answer: string;
-  explanation: string | null;
   hints: string[];
   topic: { name: string; pattern: string | null };
 }
@@ -28,6 +26,12 @@ interface Evaluation {
   feedback: string;
   errorTags: string[];
   difficulty: number;
+}
+
+/** Sent by the submit endpoint only after the learner has answered. */
+interface Reveal {
+  answer: string;
+  explanation: string | null;
 }
 
 const RESULT_STYLES = {
@@ -55,6 +59,7 @@ export default function ReviewSession() {
   const [loading, setLoading] = useState(true);
   const [answer, setAnswer] = useState("");
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
+  const [reveal, setReveal] = useState<Reveal | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,9 +101,16 @@ export default function ReviewSession() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cardId: current.card.id, userAnswer: answer }),
       });
+      if (res.status === 409) {
+        // Already graded from another tab or a double submit; move on rather
+        // than grading (and scheduling) the same card twice.
+        next();
+        return;
+      }
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setEvaluation(data.evaluation);
+      setReveal(data.reveal ?? null);
       setReviewed((n) => n + 1);
       if (data.evaluation?.result === "CORRECT") setCorrect((n) => n + 1);
     } catch {
@@ -112,6 +124,7 @@ export default function ReviewSession() {
     setQueue((q) => q.slice(1));
     setAnswer("");
     setEvaluation(null);
+    setReveal(null);
     setShowHint(false);
     setError(null);
     // Return focus to the input so keyboard users keep their flow.
@@ -268,6 +281,7 @@ export default function ReviewSession() {
               <>
                 <textarea
                   ref={inputRef}
+                  maxLength={2000}
                   lang="de"
                   autoFocus
                   className="field text-german min-h-[6rem] resize-none"
@@ -325,21 +339,21 @@ export default function ReviewSession() {
                 </div>
 
                 {/* Reference answer, with audio so you hear it done right */}
-                {evaluation.result !== "CORRECT" && (
+                {evaluation.result !== "CORRECT" && reveal && (
                   <div className="flex items-start gap-3 rounded-xl border border-line px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
                         {t("review.expected")}
                       </p>
-                      <p lang="de" className="text-german">{current.card.answer}</p>
+                      <p lang="de" className="text-german">{reveal.answer}</p>
                     </div>
-                    <SpeakButton text={current.card.answer} size="sm" label={t("review.listen")} />
+                    <SpeakButton text={reveal.answer} size="sm" label={t("review.listen")} />
                   </div>
                 )}
 
-                {current.card.explanation && (
+                {reveal?.explanation && (
                   <p className="text-sm leading-relaxed text-ink-muted">
-                    {current.card.explanation}
+                    {reveal.explanation}
                   </p>
                 )}
 

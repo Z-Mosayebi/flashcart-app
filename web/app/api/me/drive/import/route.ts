@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
-import { importDocument } from "@/lib/import";
+import { IMPORT_TIME_BUDGET_MS, importDocument, type ImportOutcome } from "@/lib/import";
 import { isAuthError } from "@/lib/google-drive";
 
 // Importing a long document is many model calls; give it the most the host
@@ -18,6 +18,10 @@ const MAX_DOCUMENTS_PER_REQUEST = 5;
  * Documents are processed in order, and each one's progress is written to the
  * database as it goes. A client that navigates away can poll GET /api/me/drive
  * to see where the import got to.
+ *
+ * One request works for at most IMPORT_TIME_BUDGET_MS. Anything it didn't get
+ * to comes back with status "partial"; posting those fileIds again continues
+ * from the saved position.
  */
 export async function POST(req: NextRequest) {
   const userId = await requireUserId();
@@ -41,11 +45,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const results = [];
+  const deadline = Date.now() + IMPORT_TIME_BUDGET_MS;
+  const results: ImportOutcome[] = [];
 
   for (const fileId of fileIds) {
+    if (Date.now() > deadline) {
+      // Not started: report it as partial so the client asks again.
+      results.push({
+        documentId: "",
+        fileId,
+        title: fileId,
+        status: "partial",
+        cardsCreated: 0,
+        sectionsDone: 0,
+        sectionsTotal: 0,
+      });
+      continue;
+    }
+
     try {
-      results.push(await importDocument(userId, fileId));
+      results.push(await importDocument(userId, fileId, deadline));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Import failed";
 
@@ -64,8 +83,9 @@ export async function POST(req: NextRequest) {
 
       results.push({
         documentId: "",
+        fileId,
         title: fileId,
-        status: "failed" as const,
+        status: "failed",
         cardsCreated: 0,
         sectionsDone: 0,
         sectionsTotal: 0,

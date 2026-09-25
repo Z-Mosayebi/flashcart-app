@@ -40,6 +40,9 @@ interface DriveFile {
 /** While an import runs, poll for progress so the section counter advances. */
 const PROGRESS_POLL_MS = 2_500;
 
+/** Upper bound on continuation requests for one import (each is up to ~3 min). */
+const MAX_IMPORT_ROUNDS = 40;
+
 const DriveMark = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <path d="M7.71 3.5 1.15 15l3.43 5.95L11.14 9.5zm8.58 0H9.43l6.56 11.5h6.86zM6.5 16.5 3.07 22.45h13.14L19.64 16.5z" />
@@ -156,31 +159,42 @@ export default function DriveConnect() {
     setNotice(t("drive.import.started"));
     setPickerOpen(false);
 
+    type Result = { fileId: string; status: string; cardsCreated: number; error?: string };
+
     try {
-      const res = await fetch("/api/me/drive/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileIds }),
-      });
-      const data = await res.json();
+      // Each request works for a bounded time and reports what it didn't
+      // finish as "partial"; keep asking until every document is done. The
+      // round cap is only a guard against a server that never finishes.
+      let pending = fileIds;
+      let added = 0;
+      const settled: Result[] = [];
 
-      if (res.status === 403) {
-        setError(t("drive.error.unauthorized"));
-        setNotice(null);
-        return;
+      for (let round = 0; pending.length > 0 && round < MAX_IMPORT_ROUNDS; round++) {
+        const res = await fetch("/api/me/drive/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileIds: pending }),
+        });
+        const data = await res.json();
+
+        if (res.status === 403) {
+          setError(t("drive.error.unauthorized"));
+          setNotice(null);
+          return;
+        }
+        if (!res.ok) throw new Error(data?.detail);
+
+        const results = (data.results ?? []) as Result[];
+        added += results.reduce((sum, r) => sum + (r.cardsCreated ?? 0), 0);
+        settled.push(...results.filter((r) => r.status !== "partial"));
+        pending = results.filter((r) => r.status === "partial").map((r) => r.fileId);
+        void load();
       }
-      if (!res.ok) throw new Error(data?.detail);
 
-      const results = (data.results ?? []) as {
-        status: string;
-        cardsCreated: number;
-        error?: string;
-      }[];
-
-      const added = results.reduce((sum, r) => sum + (r.cardsCreated ?? 0), 0);
+      const results = settled;
       const failed = results.filter((r) => r.status === "failed");
 
-      if (failed.length === results.length) {
+      if (results.length > 0 && failed.length === results.length) {
         setError(failed[0]?.error ?? t("drive.error.generic"));
         setNotice(null);
       } else if (added === 0) {
@@ -302,7 +316,9 @@ export default function DriveConnect() {
                     {!doc.readOnly && state.connected && (
                       <button
                         onClick={() => void startImport([doc.externalId])}
-                        disabled={importing || doc.status === "IMPORTING"}
+                        // Not disabled for IMPORTING: an import whose request died
+                        // would otherwise be stuck forever. Clicking resumes it.
+                        disabled={importing}
                         className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-40 dark:text-slate-400 dark:hover:text-slate-100"
                       >
                         {t("drive.documents.reimport")}

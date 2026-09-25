@@ -13,8 +13,14 @@ topic, writing cloze deletions for vocab, and turning the "Grammatik & Fehler"
 error log into ERROR_CORRECTION cards.
 """
 
+import logging
+
+from pydantic import ValidationError
+
 from app.models.schemas import GeneratedCard, GenerateCardsResponse
 from app.services.llm_client import ask_json
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a German-language curriculum designer building spaced-repetition \
 flashcards from a language learner's raw study notes. The notes mix German \
@@ -77,10 +83,27 @@ Generate the flashcard set now. Aim for thorough coverage: every grammar rule, e
 mistake, every vocabulary item, and every example sentence in the notes should map to at least \
 one card. Return the JSON array only."""
 
-    raw = ask_json(SYSTEM_PROMPT, user_prompt, max_tokens=4000)
+    # A 6k-character section asked for "thorough coverage" routinely needs more
+    # than 4k output tokens; a truncated array used to lose the whole section.
+    raw = ask_json(SYSTEM_PROMPT, user_prompt, max_tokens=8192)
 
     if isinstance(raw, dict) and "cards" in raw:
         raw = raw["cards"]
+    if not isinstance(raw, list):
+        raise ValueError("Model did not return a list of cards")
 
-    cards = [GeneratedCard(**item) for item in raw]
+    # Validate card by card: one malformed card (an unknown type, a missing
+    # answer) should cost that card, not every good card in the section.
+    cards: list[GeneratedCard] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            cards.append(GeneratedCard(**item))
+        except ValidationError as e:
+            logger.warning("Skipping malformed generated card: %s", e.errors()[:1])
+
+    if raw and not cards:
+        raise ValueError("Model returned no valid cards")
+
     return GenerateCardsResponse(cards=cards)

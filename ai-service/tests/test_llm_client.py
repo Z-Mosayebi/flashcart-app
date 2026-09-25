@@ -111,3 +111,14 @@ def test_gemini_zero_quota_is_distinguished_from_rate_limit(monkeypatch):
     with patch("httpx.post", return_value=_Response429(body)):
         with pytest.raises(RuntimeError, match="not available on your Gemini plan"):
             ask_json("sys", "user")
+
+
+def test_truncated_array_keeps_the_complete_objects():
+    """Output cut off by the token limit keeps every card that finished."""
+    text = '[{"a": 1}, {"a": 2}, {"a": 3, "b": "unfinish'
+    assert _extract_json(text) == [{"a": 1}, {"a": 2}]
+
+
+def test_truncated_array_inside_a_fence_is_salvaged():
+    text = '```json\n[{"a": 1},\n {"a": 2'
+    assert _extract_json(text) == [{"a": 1}]

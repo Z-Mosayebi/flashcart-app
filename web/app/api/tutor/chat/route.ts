@@ -7,6 +7,9 @@ import { tutorChat } from "@/lib/ai";
  *  long sessions while preserving enough context to judge mastery. */
 const HISTORY_WINDOW = 20;
 
+/** Matches the AI service's limit on a single learner message. */
+const MAX_MESSAGE_CHARS = 2_000;
+
 /**
  * POST /api/tutor/chat
  * body: { topicId, sessionId?, message }
@@ -36,6 +39,9 @@ export async function POST(req: NextRequest) {
   if (!topicId) {
     return NextResponse.json({ error: "topicId is required" }, { status: 400 });
   }
+  if (message.length > MAX_MESSAGE_CHARS) {
+    return NextResponse.json({ error: "message_too_long" }, { status: 400 });
+  }
 
   // Owner-scoped so a guessed topic id can't start a session on someone
   // else's material.
@@ -56,13 +62,16 @@ export async function POST(req: NextRequest) {
     session = await prisma.tutorSession.create({ data: { userId, topicId } });
   }
 
+  // The *latest* HISTORY_WINDOW messages: fetched newest-first, then put back
+  // in chronological order. Ordering ascending with a take would replay the
+  // opening of the session forever and hide everything the learner said since.
   const priorMessages = await prisma.tutorMessage.findMany({
     where: { sessionId: session.id },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: HISTORY_WINDOW,
   });
 
-  const history = priorMessages.map((m) => ({
+  const history = priorMessages.reverse().map((m) => ({
     role: m.role === "USER" ? ("user" as const) : ("assistant" as const),
     content: m.content,
   }));

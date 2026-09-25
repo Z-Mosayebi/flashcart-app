@@ -162,11 +162,53 @@ def _extract_json(text: str) -> dict | list:
         except json.JSONDecodeError:
             pass
 
-    brace_match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
+    # When the payload is an array, match it as one: otherwise a truncated
+    # array whose only complete element is its first object would come back as
+    # that lone object rather than a list.
+    first_array, first_object = text.find("["), text.find("{")
+    array_first = first_array != -1 and (first_object == -1 or first_array < first_object)
+    pattern = r"(\[.*\])" if array_first else r"(\{.*\}|\[.*\])"
+
+    brace_match = re.search(pattern, text, re.DOTALL)
     if brace_match:
-        return json.loads(brace_match.group(1))
+        try:
+            return json.loads(brace_match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    salvaged = _salvage_truncated_array(text) if array_first else []
+    if salvaged:
+        return salvaged
 
     raise ValueError(f"Could not extract JSON from model response: {text[:200]}")
+
+
+def _salvage_truncated_array(text: str) -> list:
+    """Recovers the complete objects from an array cut off mid-way.
+
+    Long card sets can hit the output token limit, which truncates the JSON
+    partway through the last object. Without this, one unfinished card would
+    throw away every finished card before it.
+    """
+    start = text.find("[")
+    if start == -1:
+        return []
+
+    decoder = json.JSONDecoder()
+    items: list = []
+    pos = start + 1
+    while True:
+        # Skip separators between elements.
+        while pos < len(text) and text[pos] in " \t\r\n,":
+            pos += 1
+        if pos >= len(text) or text[pos] != "{":
+            break
+        try:
+            item, pos = decoder.raw_decode(text, pos)
+        except json.JSONDecodeError:
+            break
+        items.append(item)
+    return items
 
 
 def ask_json(system: str, user: str, max_tokens: int = 1500) -> dict | list:
