@@ -28,7 +28,14 @@ interface PreferencesContext extends Preferences {
 
 const Ctx = createContext<PreferencesContext | null>(null);
 
-const STORAGE_KEY = "flashcart:prefs";
+const STORAGE_KEY = "flashcard:prefs";
+// Written under the app's earlier misspelled name. Still read so existing
+// visitors keep their theme and language; removed on the next save.
+const LEGACY_STORAGE_KEY = "flashcart:prefs";
+
+function readStoredPrefs(): string | null {
+  return localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+}
 
 function applyTheme(theme: ThemePref) {
   if (typeof document === "undefined") return;
@@ -52,7 +59,7 @@ export function PreferencesProvider({
   // Hydrate from localStorage on mount.
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = readStoredPrefs();
       if (raw) {
         const saved = JSON.parse(raw) as Partial<Preferences>;
         if (isLocale(saved.locale)) setLocaleState(saved.locale);
@@ -82,9 +89,10 @@ export function PreferencesProvider({
 
   const persist = useCallback((next: Partial<Preferences>) => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = readStoredPrefs();
       const current = raw ? JSON.parse(raw) : {};
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, ...next }));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     } catch {
       /* storage unavailable (private mode) — preference stays in memory only */
     }

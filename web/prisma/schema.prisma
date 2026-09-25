@@ -1,4 +1,4 @@
-// Flashcart — German Learning Flashcards with Leitner + AI Tutoring
+// Flashcard — German Learning Flashcards with Leitner + AI Tutoring
 // Prisma schema for Postgres (Neon/Supabase on Vercel)
 
 generator client {

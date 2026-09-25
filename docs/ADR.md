@@ -1,8 +1,8 @@
-# Architecture Decision Record — Flashcart
+# Architecture Decision Record — Flashcard
 
 **Status:** Living document · **Last updated:** 2026-07-28
 
-This record captures the significant architectural decisions behind Flashcart: what
+This record captures the significant architectural decisions behind Flashcard: what
 was decided, the situation that forced the decision, what else was considered, and
 what the choice costs us. It is written for someone joining the project who needs to
 know *why* the system looks the way it does before changing it.
@@ -41,7 +41,7 @@ Each decision uses the same shape: **Context → Decision → Alternatives → C
 
 ### Context
 
-Flashcart has two very different kinds of work. One is a conventional web product:
+Flashcard has two very different kinds of work. One is a conventional web product:
 pages, sessions, API routes, relational data. The other is model-facing work: prompt
 design, JSON-mode coaxing, grading heuristics, multi-turn tutoring state. These evolve
 on different rhythms. Prompt work changes daily during tuning and needs fast, isolated
@@ -382,7 +382,7 @@ independent records instead of colliding.
 
 ### Context
 
-Every meaningful route in Flashcart is user-scoped: due cards, progress, attempts, tutor
+Every meaningful route in Flashcard is user-scoped: due cards, progress, attempts, tutor
 sessions, the Drive connection. The tempting shape — accept a `userId` parameter — is
 also the vulnerability: anyone could read or overwrite another learner's data by editing
 one query parameter.

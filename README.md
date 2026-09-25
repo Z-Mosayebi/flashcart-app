@@ -1,16 +1,16 @@
 <div align="center">
 
-# 🇩🇪 Flashcart
+# 🇩🇪 Flashcard
 
 ### Speak German you can actually produce.
 
-Flashcart turns **your own notes** into spoken flashcards and drills you with an AI tutor
+Flashcard turns **your own notes** into spoken flashcards and drills you with an AI tutor
 that keeps asking until the grammar sticks — not until you *recognise* the answer,
 but until you can **produce it yourself**.
 
 <br>
 
-![Flashcart landing page](docs/images/landing.png)
+![Flashcard landing page](docs/images/landing.png)
 
 <br>
 
@@ -20,7 +20,7 @@ but until you can **produce it yourself**.
 [![Prisma](https://img.shields.io/badge/Prisma-Postgres-2D3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io)
 [![Runs free](https://img.shields.io/badge/runs-100%25_free_tier-brightgreen?style=flat-square)](#-setup)
 
-**[Getting started](#-using-flashcart)** · **[Setup](#-setup)** · **[Docs](#-documentation)**
+**[Getting started](#-using-flashcard)** · **[Setup](#-setup)** · **[Docs](#-documentation)**
 
 </div>
 
@@ -39,12 +39,12 @@ but until you can **produce it yourself**.
 | 📱 | **Built for your phone** | Responsive, installable, dark mode included |
 
 > [!TIP]
-> **Just want to use it?** → [Using Flashcart](#-using-flashcart)
+> **Just want to use it?** → [Using Flashcard](#-using-flashcard)
 > **Running it yourself?** → [Setup](#-setup)
 
 ## 📖 Contents
 
-- [Using Flashcart](#-using-flashcart) — the user guide, no terminal required
+- [Using Flashcard](#-using-flashcard) — the user guide, no terminal required
 - [How it works](#-how-it-works) — the loop in one diagram
 - [Stack](#-stack) · [Project layout](#-project-layout)
 - [Setup](#-setup) — run it locally, step by step
@@ -64,9 +64,9 @@ flowchart LR
     F --> C
 ```
 
-## 🚀 Using Flashcart
+## 🚀 Using Flashcard
 
-This section is for whoever is *learning* with Flashcart. Nothing here needs a
+This section is for whoever is *learning* with Flashcard. Nothing here needs a
 terminal.
 
 ### 1. Create your account
@@ -74,10 +74,10 @@ terminal.
 Open the app and choose **Sign up**. You can register with an email and password, or
 use **Continue with Google** if the deployment has Google sign-in enabled.
 
-The moment you sign in for the first time, Flashcart copies a **starter German deck**
+The moment you sign in for the first time, Flashcard copies a **starter German deck**
 into your account, so there is something to review before you have connected anything.
 Those cards are now yours — edit or delete them freely, it affects nobody else. Every
-deck in Flashcart is private to one account.
+deck in Flashcard is private to one account.
 
 If you registered with email and password and later forget it, use **Forgot password**
 on the sign-in page. You will get a link that is valid for one hour and works once.
@@ -98,9 +98,9 @@ instead; the app tells you so rather than silently sending nothing.)
 4. You get back a verdict — **correct, partly correct, or incorrect** — plus feedback
    explaining *what* was wrong: word order, the wrong case, a missing article. Wrong
    answers are tagged by mistake type so patterns show up later on your dashboard.
-5. Flashcart then schedules when that card comes back.
+5. Flashcard then schedules when that card comes back.
 
-**When cards come back.** Flashcart uses a five-box Leitner system: get a card right
+**When cards come back.** Flashcard uses a five-box Leitner system: get a card right
 and it moves up a box and waits longer (roughly 4 hours → 1 day → 3 days → 1 week →
 3 weeks); get it wrong and it drops back to box 1 and returns the same day. A partly
 correct answer holds its place.
@@ -110,7 +110,7 @@ got right but visibly struggled with comes back sooner than one you nailed — u
 about 60% sooner within the same box. So the queue tracks how solid you actually are,
 not just your last yes/no.
 
-When nothing is due, you are done for now. That is the intended feeling — Flashcart
+When nothing is due, you are done for now. That is the intended feeling — Flashcard
 does not manufacture busywork.
 
 ### 3. Drill a grammar pattern — `/tutor`
@@ -325,7 +325,7 @@ covers 3,000 emails/month without a card:
 2. Put it in `web/.env`:
    ```
    RESEND_API_KEY=re_...
-   EMAIL_FROM="Flashcart <onboarding@resend.dev>"
+   EMAIL_FROM="Flashcard <onboarding@resend.dev>"
    ```
 
 `onboarding@resend.dev` is Resend's shared sender and works with no DNS setup, but it

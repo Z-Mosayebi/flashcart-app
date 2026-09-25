@@ -1,4 +1,4 @@
-# Render blueprint for the Flashcart AI service.
+# Render blueprint for the Flashcard AI service.
 #
 # Deploys ai-service/ as a free web service. Render reads this automatically
 # when you point it at this repo ("New → Blueprint"), so the build and start
@@ -9,6 +9,8 @@
 # that as a retryable error rather than a crash.
 services:
   - type: web
+    # Keeps its original spelling on purpose: the name fixes the service URL
+    # (flashcart-ai.onrender.com), which AI_SERVICE_URL and monitors point at.
     name: flashcart-ai
     runtime: python
     plan: free

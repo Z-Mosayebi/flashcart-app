@@ -43,7 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             on a dark-mode device. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=JSON.parse(localStorage.getItem('flashcart:prefs')||'{}');var t=p.theme||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
+            __html: `(function(){try{var p=JSON.parse((localStorage.getItem('flashcard:prefs')||localStorage.getItem('flashcart:prefs'))||'{}');var t=p.theme||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
           }}
         />
       </head>
