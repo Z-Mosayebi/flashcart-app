@@ -11,6 +11,7 @@
  * over a credential that works immediately.
  */
 
+import { parseXlsx } from "@/lib/file-parsers";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
 
@@ -317,9 +318,9 @@ export async function fetchDocumentText(
 /**
  * Reads a spreadsheet as rows.
  *
- * Only Google Sheets can be read through the Sheets API. An uploaded .xlsx has
- * to be converted first, which is a copy the user did not ask for, so it is
- * reported as needing conversion rather than silently duplicating their file.
+ * Google Sheets are read through the Sheets API. An .xlsx stored in Drive is
+ * downloaded and parsed here instead — converting it to a Google Sheet would
+ * leave a copy in the learner's Drive they never asked for.
  */
 export async function fetchSpreadsheetRows(
   userId: string,
@@ -327,9 +328,9 @@ export async function fetchSpreadsheetRows(
   mimeType: string
 ): Promise<string[][]> {
   if (mimeType === MIME.xlsx) {
-    throw new Error(
-      "Excel files need converting to Google Sheets first — open it in Drive and choose File → Save as Google Sheets."
-    );
+    const token = await getAccessToken(userId);
+    const res = await driveFetch(token, `${DRIVE_API}/files/${fileId}?alt=media&supportsAllDrives=true`);
+    return parseXlsx(Buffer.from(await res.arrayBuffer()));
   }
 
   const token = await getAccessToken(userId);

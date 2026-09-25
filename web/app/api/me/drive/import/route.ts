@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
 import { IMPORT_TIME_BUDGET_MS, importDocument, type ImportOutcome } from "@/lib/import";
 import { isAuthError } from "@/lib/google-drive";
+import { DocumentLimitError, limitResponse } from "@/lib/entitlements";
 
 // Importing a long document is many model calls; give it the most the host
 // allows. Progress is persisted per section, so a platform timeout leaves the
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest) {
     try {
       results.push(await importDocument(userId, fileId, deadline));
     } catch (err) {
+      // The plan's document allowance is used up: nothing further can import,
+      // so stop and let the client show the upgrade prompt.
+      if (err instanceof DocumentLimitError) return limitResponse(err.entitlement, "documents");
+
       const message = err instanceof Error ? err.message : "Import failed";
 
       // Lost Drive access affects every remaining document, so stop rather
