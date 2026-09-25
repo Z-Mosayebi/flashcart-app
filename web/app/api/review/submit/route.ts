@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { evaluateAnswer } from "@/lib/ai";
 import { scheduleNextReview } from "@/lib/leitner";
 import { requireUserId } from "@/lib/auth";
+import { getEntitlement, limitResponse } from "@/lib/entitlements";
+import { atLimit } from "@/lib/plans";
 
 /** Matches the AI service's limit; longer input is almost certainly not an answer. */
 const MAX_ANSWER_CHARS = 2_000;
@@ -47,6 +49,11 @@ export async function POST(req: NextRequest) {
     include: { topic: true },
   });
   if (!card) return NextResponse.json({ error: "card not found" }, { status: 404 });
+
+  // Checked before the model call: the cap exists to protect the shared
+  // free model quota, so a request over it must not reach the model at all.
+  const entitlement = await getEntitlement(userId);
+  if (atLimit(entitlement, "graded")) return limitResponse(entitlement, "graded");
 
   // Read the progress row before grading so a concurrent submit of the same
   // card (double click, second tab) can be detected when writing below.

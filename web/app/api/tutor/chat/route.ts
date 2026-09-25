@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
+import { getEntitlement, limitResponse } from "@/lib/entitlements";
+import { atLimit } from "@/lib/plans";
 import { tutorChat } from "@/lib/ai";
 
 /** How many prior turns to replay to the model. Keeps prompt size bounded on
@@ -47,6 +49,10 @@ export async function POST(req: NextRequest) {
   // else's material.
   const topic = await prisma.topic.findFirst({ where: { id: topicId, ownerId: userId } });
   if (!topic) return NextResponse.json({ error: "topic not found" }, { status: 404 });
+
+  // The opening turn is a model call too, so it counts like any other reply.
+  const entitlement = await getEntitlement(userId);
+  if (atLimit(entitlement, "tutor")) return limitResponse(entitlement, "tutor");
 
   // Resolve the session, verifying ownership so a guessed id can't read
   // someone else's conversation.
