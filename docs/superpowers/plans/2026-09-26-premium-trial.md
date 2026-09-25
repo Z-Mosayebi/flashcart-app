@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Free: 1 document total, 30 graded answers/day, 10 tutor replies/day. Premium: 10 / 200 / 50. Admins: no limits.
-- "Per day" resets at midnight Europe/Berlin.
+- "Per day" resets at midnight in the **user's own time zone** (`User.timeZone`, IANA), falling back to Europe/Berlin when unknown or invalid. See "Amendment" at the end of this plan.
 - Trial lengths offered: 7, 14, 30 days. Activating sets `premiumUntil = max(now, premiumUntil) + days`. Expiry is only the date passing; no scheduled job.
 - Uploads: `.xlsx`, `.csv`, `.docx`, `.txt`, `.md`, at most 2 MB. The file is never stored, only its extracted text.
 - The starter deck is not a document. Re-importing an owned document, or continuing an unfinished one, is always allowed.
@@ -33,7 +33,7 @@ Most likely first:
 
 1. **Premium ending exactly now.** When `premiumUntil === now`, the user must be free, not premium, and every request must re-read entitlement. Pinned in Task 1 (`planFor` boundary test).
 2. **Messy `ADMIN_EMAILS`.** Values with spaces or mixed case, such as `" Zhmosayebi@Gmail.com , "`, must still match, and an empty value must match no one. Pinned in Task 1.
-3. **Berlin midnight and DST days.** 23:30 UTC in summer is already "tomorrow" in Berlin. Pinned in Task 1.
+3. **Midnight and DST days in the user's zone.** 23:30 UTC in summer is already "tomorrow" in Berlin, and a bogus zone string must fall back rather than throw. Pinned in Task 1 and Task 11.
 4. **A spreadsheet with blank rows or a UTF-8 BOM.** The BOM must be stripped and blank rows dropped. A sheet of only blanks becomes "This spreadsheet is empty". Pinned in Task 4.
 5. **Telegram down or Resend unconfigured.** The request is still saved, and the other channel is still tried. Pinned in Task 6.
 
@@ -3543,3 +3543,25 @@ The web deploy that uses the new schema must come **after** the migration. In or
    - As a non-admin, opening `/admin` lands on `/dashboard` with no error.
 
 Rollback: `psql "$DATABASE_URL" -f web/prisma/migrations/20260926000000_premium_trial/down.sql`, then redeploy the previous `main` commit.
+
+---
+
+## Amendment: per-user time zone and streak (approved 2026-09-26)
+
+These changes are folded into the tasks above during execution:
+
+- **Task 1:** also export `DEFAULT_TIME_ZONE = "Europe/Berlin"`, `isValidTimeZone(tz: unknown): tz is string` (true iff `new Intl.DateTimeFormat("en-US", { timeZone: tz })` does not throw), and `resolveTimeZone(tz?: string | null): string`. `startOfDay` and `dayKey` keep their `timeZone` parameter. Tests: `isValidTimeZone("Asia/Tehran")` is true; `"Mars/Base"`, `""` and `null` are false; `resolveTimeZone("Mars/Base")` is `"Europe/Berlin"`; `startOfDay(at("2026-01-15T08:00:00Z"), "Asia/Tehran")` is `"2026-01-14T20:30:00.000Z"`.
+- **Task 2:** `User.timeZone String?` with the comment "IANA zone reported by the browser; daily limits and the streak reset at its midnight." The migration adds `ALTER TABLE "User" ADD COLUMN "timeZone" TEXT;`. down.sql drops it, and the verify checks include it.
+- **Task 3:**
+  - `getEntitlement` selects `timeZone` and uses `startOfDay(now, resolveTimeZone(user?.timeZone))`.
+  - `Entitlement` gains `timeZone: string`.
+  - `PATCH /api/me/preferences` accepts `{ locale?, timeZone? }`: at least one is required, each is validated (`isLocale` / `isValidTimeZone`), and only the valid fields are updated.
+- **Task 7:** `usersOverDailyCap(rows, cap, exclude, zoneOf: (userId: string) => string)` buckets with `dayKey(row.createdAt, zoneOf(row.userId))`. The overview route loads `{ id, timeZone }` for the users in the rows and passes `(id) => resolveTimeZone(map.get(id))`. The test passes `() => "Europe/Berlin"`.
+- **Task 8:**
+  - `limit.resets` becomes "Free limits reset at midnight, your time." / "Die kostenlosen Limits werden um Mitternacht (deine Ortszeit) zurückgesetzt."
+  - New `web/components/TimeZoneSync.tsx`, rendered inside the session provider in `web/components/Providers.tsx`. When `status === "authenticated"` and `sessionStorage["flashcard:tz-synced"]` is not the current zone, it PATCHes `{ timeZone }` and then sets the flag (both inside try/catch).
+- **Task 11 (new): streak in the user's zone.**
+  - Move `computeStreak` from `web/app/api/dashboard/route.ts` to `web/lib/streak.ts` as `computeStreak(dates: Date[], now: Date, timeZone: string): number`.
+  - It walks back from **local noon** of today (`startOfDay(now, tz) + 12h`, minus `i × 24h`), so a 23- or 25-hour DST day can't skip or repeat a date. It keys days with `dayKey(date, tz)` and keeps "yesterday still counts".
+  - Tests: consecutive local days count, a gap breaks the streak, yesterday-only counts, and a streak across the 29 Mar 2026 DST switch in Europe/Berlin is not broken.
+  - The dashboard route loads the user's `timeZone` and calls it with `resolveTimeZone(...)`.

@@ -179,3 +179,19 @@ implementation, including enabling Resend.
   failing), admin-access check.
 - Existing pytest and vitest suites stay green; `next build` passes in CI.
 - Manual online check after deploy, with the steps given to the owner.
+
+## Amendment (2026-09-26): per-user time zone
+
+Approved after the spec review. "Per day" means midnight **in the user's own
+time zone**, not Europe/Berlin:
+
+- `User.timeZone String?` (IANA name, e.g. `Asia/Tehran`), added in the same
+  migration. The browser reports it (`Intl.DateTimeFormat().resolvedOptions()`)
+  through `PATCH /api/me/preferences` once per browser session after sign-in;
+  the server stores it only if it is a valid IANA zone. It follows the user
+  when they move.
+- Missing or invalid → Europe/Berlin.
+- Changing the device's zone can shift one day's reset by a few hours; accepted.
+- Limit copy says "midnight, your time". The admin's limit-hit analytics bucket
+  each user's rows by that user's zone.
+- The dashboard streak, previously computed on UTC days, uses the same zone.
