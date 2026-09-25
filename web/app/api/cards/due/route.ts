@@ -9,7 +9,21 @@ import { requireUserId } from "@/lib/auth";
  * treated as immediately due at box 1.
  *
  * The user comes from the session, never from a query param.
+ *
+ * The reference answer and explanation are not included: they are returned by
+ * /api/review/submit once the learner has answered, so they can't be read
+ * ahead of time from the network response.
  */
+
+// Everything the review screen needs before an answer is submitted.
+const CARD_FIELDS = {
+  id: true,
+  type: true,
+  prompt: true,
+  hints: true,
+  topic: { select: { name: true, pattern: true } },
+} as const;
+
 export async function GET(req: NextRequest) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -21,7 +35,7 @@ export async function GET(req: NextRequest) {
     where: { userId, dueAt: { lte: new Date() } },
     orderBy: { dueAt: "asc" },
     take: limit,
-    include: { card: { include: { topic: true } } },
+    include: { card: { select: CARD_FIELDS } },
   });
 
   let cards = dueProgress.map((p) => ({
@@ -45,7 +59,7 @@ export async function GET(req: NextRequest) {
         ...(seenCardIds.length ? { id: { notIn: seenCardIds } } : {}),
       },
       take: limit - cards.length,
-      include: { topic: true },
+      select: CARD_FIELDS,
       orderBy: { createdAt: "asc" },
     });
 

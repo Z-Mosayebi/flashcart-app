@@ -101,3 +101,24 @@ def test_chat_turn_flags_mastery(mock_ask_json):
     )
 
     assert result.mastered is True
+
+
+@patch("app.services.tutor.ask_json")
+def test_out_of_range_difficulty_is_clamped(mock_ask_json):
+    """The scheduler expects 0..1; the model does not always comply."""
+    base = {"result": "CORRECT", "feedback": "Good.", "errorTags": []}
+    req = EvaluateAnswerRequest(cardPrompt="p", expectedAnswer="a", userAnswer="a")
+
+    for raw, expected in [(1.7, 1.0), (-0.3, 0.0), (float("nan"), 0.5)]:
+        mock_ask_json.return_value = {**base, "difficulty": raw}
+        assert evaluate_answer(req).difficulty == expected
+
+
+def test_oversized_answer_is_rejected(monkeypatch):
+    monkeypatch.setenv("AI_SERVICE_AUTH_TOKEN", "test-service-token")
+    res = client.post(
+        "/tutor/evaluate",
+        headers={"X-AI-Service-Token": "test-service-token"},
+        json={"cardPrompt": "p", "expectedAnswer": "a", "userAnswer": "x" * 2_001},
+    )
+    assert res.status_code == 422

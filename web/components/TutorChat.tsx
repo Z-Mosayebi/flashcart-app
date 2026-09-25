@@ -271,6 +271,7 @@ export default function TutorChat() {
         <div className="safe-bottom flex items-end gap-2 pt-3">
           <textarea
             ref={inputRef}
+            maxLength={2000}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

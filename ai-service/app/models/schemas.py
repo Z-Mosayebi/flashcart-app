@@ -4,13 +4,20 @@ Kept in one module so the Next.js `lib/ai.ts` client and this service stay in
 sync by inspection — the field names here are mirrored 1:1 on the TS side.
 """
 
+import math
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AttemptResult = Literal["CORRECT", "PARTIAL", "INCORRECT"]
 
 CardType = Literal["CLOZE", "SENTENCE_PRODUCTION", "GRAMMAR_QA", "ERROR_CORRECTION", "VOCAB"]
+
+# Upper bounds on caller-supplied text. The web tier enforces the same limits;
+# these stop an oversized request from turning into an oversized model bill.
+MAX_ANSWER_CHARS = 2_000
+MAX_NOTES_CHARS = 60_000
+MAX_HISTORY_MESSAGES = 40
 
 
 # ---------- /generate/cards ----------
@@ -19,7 +26,7 @@ CardType = Literal["CLOZE", "SENTENCE_PRODUCTION", "GRAMMAR_QA", "ERROR_CORRECTI
 class GenerateCardsRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    raw_markdown: str = Field(..., alias="rawMarkdown")
+    raw_markdown: str = Field(..., alias="rawMarkdown", max_length=MAX_NOTES_CHARS)
     source_document_title: str = Field(..., alias="sourceDocumentTitle")
 
 
@@ -48,7 +55,7 @@ class EvaluateAnswerRequest(BaseModel):
 
     card_prompt: str = Field(..., alias="cardPrompt")
     expected_answer: str = Field(..., alias="expectedAnswer")
-    user_answer: str = Field(..., alias="userAnswer")
+    user_answer: str = Field(..., alias="userAnswer", max_length=MAX_ANSWER_CHARS)
     grammar_pattern: Optional[str] = Field(None, alias="grammarPattern")
     explanation: Optional[str] = None
 
@@ -67,6 +74,16 @@ class EvaluateAnswerResponse(BaseModel):
     )
     difficulty: float  # 0..1, fed into the Leitner scheduler blend
 
+    @field_validator("difficulty", mode="after")
+    @classmethod
+    def _clamp_difficulty(cls, v: float) -> float:
+        # The model occasionally strays outside 0..1 (or returns NaN). Clamp
+        # rather than reject: the grade itself is still usable, and a NaN
+        # reaching the scheduler would produce an invalid due date.
+        if not math.isfinite(v):
+            return 0.5
+        return min(max(v, 0.0), 1.0)
+
 
 # ---------- /tutor/chat ----------
 
@@ -81,8 +98,8 @@ class TutorChatRequest(BaseModel):
 
     topic_name: str = Field(..., alias="topicName")
     topic_pattern: Optional[str] = Field(None, alias="topicPattern")
-    history: list[ChatMessage] = []
-    user_message: str = Field(..., alias="userMessage")
+    history: list[ChatMessage] = Field(default_factory=list, max_length=MAX_HISTORY_MESSAGES)
+    user_message: str = Field(..., alias="userMessage", max_length=MAX_ANSWER_CHARS)
 
 
 class TutorChatResponse(BaseModel):

@@ -29,25 +29,53 @@ import {
 } from "@/lib/spreadsheet-cards";
 import { splitIntoSections, type Section } from "@/lib/sectioner";
 
+/**
+ * How long one request may spend generating before it hands back. The route's
+ * maxDuration is 300s and a single section can take ~90s in the worst case
+ * (45s timeout plus one retry), so no new section is started after 180s. That
+ * keeps the request inside the platform limit instead of being killed mid-way.
+ */
+export const IMPORT_TIME_BUDGET_MS = 180_000;
+
+/** The AI service rejects notes longer than this. */
+const MAX_NOTES_CHARS = 60_000;
+
 export interface ImportOutcome {
   documentId: string;
+  /** The Drive file id, so a client can ask to continue a partial import. */
+  fileId: string;
   title: string;
-  status: "unchanged" | "imported" | "failed";
+  /** "partial": the time budget ran out; calling again continues where it stopped. */
+  status: "unchanged" | "imported" | "partial" | "failed";
   cardsCreated: number;
   sectionsDone: number;
   sectionsTotal: number;
   error?: string;
 }
 
+interface SectionProgress {
+  cardsCreated: number;
+  sectionsDone: number;
+  sectionsTotal: number;
+  /** True when the deadline stopped the import before the last section. */
+  remaining?: boolean;
+}
+
 /**
  * Imports one Drive document into a user's deck.
  *
  * Safe to call again on the same document: unchanged documents are skipped via
- * Drive's revision id, and cards that already exist are not duplicated.
+ * Drive's revision id, cards that already exist are not duplicated, and an
+ * import that was interrupted (time budget, crash, platform timeout) resumes at
+ * the section it reached rather than starting over.
+ *
+ * `deadline` (epoch ms) bounds how long this call keeps generating; past it the
+ * document is left PENDING and the outcome is "partial".
  */
 export async function importDocument(
   userId: string,
-  fileId: string
+  fileId: string,
+  deadline: number = Date.now() + IMPORT_TIME_BUDGET_MS
 ): Promise<ImportOutcome> {
   const meta = await getFileMetadata(userId, fileId);
 
@@ -76,6 +104,7 @@ export async function importDocument(
   if (unchanged) {
     return {
       documentId: existing.id,
+      fileId,
       title: existing.title,
       status: "unchanged",
       cardsCreated: 0,
@@ -83,6 +112,20 @@ export async function importDocument(
       sectionsTotal: existing.sectionsTotal,
     };
   }
+
+  // An interrupted import of the same revision picks up where it stopped. The
+  // stored text is reused so the sections line up with the saved position.
+  const resume =
+    existing != null &&
+    (existing.status === "IMPORTING" || existing.status === "PENDING") &&
+    existing.revisionId != null &&
+    existing.revisionId === meta.revisionId &&
+    !isSpreadsheet(meta.mimeType) &&
+    existing.rawMarkdown.length > 0 &&
+    existing.sectionsTotal > 0 &&
+    existing.sectionsDone < existing.sectionsTotal
+      ? { text: existing.rawMarkdown, from: existing.sectionsDone }
+      : undefined;
 
   const doc = await prisma.sourceDocument.upsert({
     where: {
@@ -100,21 +143,43 @@ export async function importDocument(
       mimeType: meta.mimeType,
       ownerId: userId,
       status: "IMPORTING",
+      // Recorded up front so an interrupted import can tell whether the
+      // document changed before resuming. It only marks the document up to
+      // date together with status COMPLETE, so a partial import is never skipped.
+      revisionId: meta.revisionId,
     },
-    update: {
-      title: meta.name,
-      mimeType: meta.mimeType,
-      status: "IMPORTING",
-      sectionsDone: 0,
-      sectionsTotal: 0,
-      lastError: null,
-    },
+    update: resume
+      ? { status: "IMPORTING", lastError: null }
+      : {
+          title: meta.name,
+          mimeType: meta.mimeType,
+          status: "IMPORTING",
+          revisionId: meta.revisionId,
+          sectionsDone: 0,
+          sectionsTotal: 0,
+          lastError: null,
+        },
   });
 
   try {
     const outcome = isSpreadsheet(meta.mimeType)
       ? await importSpreadsheet(userId, doc.id, fileId, meta.mimeType, meta.name)
-      : await importProse(userId, doc.id, fileId, meta.mimeType, meta.name);
+      : await importProse(userId, doc.id, fileId, meta.mimeType, meta.name, { deadline, resume });
+
+    const progress = {
+      cardsCreated: outcome.cardsCreated,
+      sectionsDone: outcome.sectionsDone,
+      sectionsTotal: outcome.sectionsTotal,
+    };
+
+    if (outcome.remaining) {
+      // Out of time, not out of work: leave it resumable for the next call.
+      await prisma.sourceDocument.update({
+        where: { id: doc.id },
+        data: { status: "PENDING" },
+      });
+      return { documentId: doc.id, fileId, title: meta.name, status: "partial", ...progress };
+    }
 
     await prisma.sourceDocument.update({
       where: { id: doc.id },
@@ -127,13 +192,12 @@ export async function importDocument(
       },
     });
 
-    return { documentId: doc.id, title: meta.name, status: "imported", ...outcome };
+    return { documentId: doc.id, fileId, title: meta.name, status: "imported", ...progress };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Import failed";
 
-    // The revision id is deliberately not written on failure: leaving it unset
-    // means the next attempt sees the document as changed and retries, rather
-    // than treating a half-finished import as up to date.
+    // FAILED is never treated as up to date (that needs COMPLETE), so the next
+    // attempt re-imports the document from the start.
     await prisma.sourceDocument.update({
       where: { id: doc.id },
       data: { status: "FAILED", lastError: message },
@@ -141,6 +205,7 @@ export async function importDocument(
 
     return {
       documentId: doc.id,
+      fileId,
       title: meta.name,
       status: "failed",
       cardsCreated: 0,
@@ -157,9 +222,10 @@ async function importProse(
   documentId: string,
   fileId: string,
   mimeType: string,
-  title: string
-): Promise<{ cardsCreated: number; sectionsDone: number; sectionsTotal: number }> {
-  const text = await fetchDocumentText(userId, fileId, mimeType);
+  title: string,
+  opts: { deadline: number; resume?: { text: string; from: number } }
+): Promise<SectionProgress> {
+  const text = opts.resume?.text ?? (await fetchDocumentText(userId, fileId, mimeType));
 
   if (!text.trim()) {
     throw new Error("This document is empty.");
@@ -173,16 +239,26 @@ async function importProse(
     );
   }
 
-  await prisma.sourceDocument.update({
-    where: { id: documentId },
-    data: { rawMarkdown: text, sectionsTotal: generable.length },
-  });
+  const startAt = opts.resume ? Math.min(opts.resume.from, generable.length) : 0;
+
+  if (!opts.resume) {
+    await prisma.sourceDocument.update({
+      where: { id: documentId },
+      data: { rawMarkdown: text, sectionsTotal: generable.length },
+    });
+  }
 
   let cardsCreated = 0;
-  let sectionsDone = 0;
+  let sectionsDone = startAt;
   const failures: string[] = [];
 
-  for (const section of generable) {
+  for (const section of generable.slice(startAt)) {
+    // Always make some progress per call, then stop once time is up so the
+    // request ends cleanly rather than being killed by the platform.
+    if (sectionsDone > startAt && Date.now() > opts.deadline) {
+      return { cardsCreated, sectionsDone, sectionsTotal: generable.length, remaining: true };
+    }
+
     try {
       const { cards } = await generateCards({
         rawMarkdown: section.body,
@@ -191,6 +267,7 @@ async function importProse(
       cardsCreated += await persistCards(userId, documentId, cards);
     } catch (err) {
       // One bad section must not discard the rest of a long document.
+      console.error(`Card generation failed for section "${sectionTitle(section)}"`, err);
       failures.push(sectionTitle(section));
     }
 
@@ -201,10 +278,10 @@ async function importProse(
     });
   }
 
-  // Every section failing means something systemic — an outage or an exhausted
-  // quota — not a quirk of the notes, so it is surfaced rather than reported
-  // as a successful import of nothing.
-  if (failures.length === generable.length) {
+  // Every section of this run failing means something systemic — an outage or
+  // an exhausted quota — not a quirk of the notes, so it is surfaced rather
+  // than reported as a successful import of nothing.
+  if (failures.length > 0 && failures.length === generable.length - startAt) {
     throw new Error("Card generation is unavailable right now. Try again shortly.");
   }
 
@@ -218,7 +295,7 @@ async function importSpreadsheet(
   fileId: string,
   mimeType: string,
   title: string
-): Promise<{ cardsCreated: number; sectionsDone: number; sectionsTotal: number }> {
+): Promise<SectionProgress> {
   const rows = await fetchSpreadsheetRows(userId, fileId, mimeType);
 
   if (rows.length === 0) {
@@ -237,7 +314,14 @@ async function importSpreadsheet(
   // costs nothing and preserves exactly what the learner wrote.
   const cards = detection.mappable
     ? buildCardsFromRows(rows, detection, { defaultTopic: title })
-    : (await generateCards({ rawMarkdown: asText, sourceDocumentTitle: title })).cards;
+    : (
+        await generateCards({
+          // The AI service caps input size; a huge unmapped sheet is cut
+          // rather than rejected outright.
+          rawMarkdown: asText.slice(0, MAX_NOTES_CHARS),
+          sourceDocumentTitle: title,
+        })
+      ).cards;
 
   const cardsCreated = await persistCards(userId, documentId, cards);
 

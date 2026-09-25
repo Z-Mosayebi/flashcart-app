@@ -4,12 +4,14 @@
  * by the FastAPI service (see ai-service/app/services/tutor.py).
  *
  * Classic Leitner: 5 boxes, each with a review interval. Correct answer -> promote
- * one box (or stay at box 5). Incorrect/partial -> demote to box 1.
+ * one box (or stay at box 5). Partial -> stay in the same box. Incorrect -> demote
+ * to box 1.
  *
  * The AI blend: instead of a flat interval per box, we scale the interval by
- * (1 - aiDifficulty), so a card the model thinks you're shaky on comes back sooner
- * even if you got the literal Leitner box right — this is what makes scheduling
- * "adaptive" rather than pure mechanical Leitner.
+ * (1 - 0.6 * aiDifficulty) — between 100% and 40% of the box's base interval — so a
+ * card the model thinks you're shaky on comes back sooner even if you got the
+ * literal Leitner box right. This is what makes scheduling "adaptive" rather than
+ * pure mechanical Leitner.
  */
 
 import { AttemptResult } from "@prisma/client";
@@ -36,7 +38,13 @@ export interface ScheduleOutput {
   dueAt: Date;
 }
 
-export function scheduleNextReview({ currentBox, result, aiDifficulty }: ScheduleInput): ScheduleOutput {
+export function scheduleNextReview(
+  { currentBox, result, aiDifficulty }: ScheduleInput,
+  now: Date = new Date()
+): ScheduleOutput {
+  // A corrupt stored box must not index past the interval table.
+  currentBox = Math.min(Math.max(Math.round(currentBox) || 1, 1), 5);
+
   let nextBox: number;
 
   if (result === "CORRECT") {
@@ -52,11 +60,13 @@ export function scheduleNextReview({ currentBox, result, aiDifficulty }: Schedul
 
   // Clamp difficulty influence so a single AI misjudgment can't push a card to
   // near-zero or absurdly long intervals. Scales interval between 40% and 100%.
-  const clampedDifficulty = Math.min(Math.max(aiDifficulty, 0), 1);
+  // A non-number (NaN) would otherwise propagate into an invalid due date.
+  const difficulty = Number.isFinite(aiDifficulty) ? aiDifficulty : 0.5;
+  const clampedDifficulty = Math.min(Math.max(difficulty, 0), 1);
   const difficultyMultiplier = 1 - clampedDifficulty * 0.6;
 
   const effectiveHours = Math.max(baseHours * difficultyMultiplier, 0.5);
-  const dueAt = new Date(Date.now() + effectiveHours * 60 * 60 * 1000);
+  const dueAt = new Date(now.getTime() + effectiveHours * 60 * 60 * 1000);
 
   return { nextBox, dueAt };
 }

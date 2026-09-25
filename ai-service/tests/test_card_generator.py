@@ -32,3 +32,28 @@ def test_generate_cards_parses_model_output(mock_ask_json):
     assert card.type == "SENTENCE_PRODUCTION"
     assert card.topic_name == "weswegen relative clause"
     assert "Integration" in card.answer
+
+
+@patch("app.services.card_generator.ask_json")
+def test_one_malformed_card_does_not_discard_the_section(mock_ask_json):
+    """A single card with an unknown type used to fail the whole section."""
+    import json
+
+    good = json.loads(MOCK_MODEL_RESPONSE)[0]
+    bad = {**good, "type": "NOT_A_TYPE"}
+    mock_ask_json.return_value = [bad, good]
+
+    result = generate_cards_from_notes(raw_markdown="...", source_document_title="DW")
+
+    assert len(result.cards) == 1
+    assert result.cards[0].type == "SENTENCE_PRODUCTION"
+
+
+@patch("app.services.card_generator.ask_json")
+def test_all_cards_malformed_is_an_error(mock_ask_json):
+    import pytest
+
+    mock_ask_json.return_value = [{"type": "NOT_A_TYPE"}]
+
+    with pytest.raises(ValueError):
+        generate_cards_from_notes(raw_markdown="...", source_document_title="DW")
