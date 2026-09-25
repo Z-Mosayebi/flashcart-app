@@ -46,6 +46,7 @@ model User {
   sourceDocuments  SourceDocument[]
   driveConnection  DriveConnection?
   premiumRequests  PremiumRequest[]
+  aiUsage          AiUsage[]
 }
 
 // ---------- NextAuth ----------
@@ -157,6 +158,11 @@ model SourceDocument {
   sectionsDone  Int     @default(0)
   sectionsTotal Int     @default(0)
   lastError     String? @db.Text
+
+  // Set when the learner removes the document. The row stays so it keeps
+  // counting toward the plan's document allowance (removing must not make room
+  // while its cards remain), and re-importing the same file revives it.
+  removedAt DateTime?
 
   // Null only for the shared starter template (see Topic.isTemplate).
   ownerId String?
@@ -392,4 +398,25 @@ model PremiumRequest {
 
   @@index([status, createdAt])
   @@index([userId])
+}
+
+// ---------- Daily AI allowance ----------
+
+enum UsageKind {
+  GRADED
+  TUTOR
+}
+
+// One row per model call counted against a daily allowance. Written *before*
+// the call and deleted if it fails, so parallel requests can't slip past the
+// limit (see web/lib/usage.ts).
+model AiUsage {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      UsageKind
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
 }

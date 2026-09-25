@@ -113,12 +113,16 @@ const CHECKS = {
       const cols = await columnsOf(tx, "User");
       check("User.premiumUntil and timeZone added", cols.includes("premiumUntil") && cols.includes("timeZone"));
       check("PremiumRequest created", (await columnsOf(tx, "PremiumRequest")) !== null);
+      check("AiUsage created", (await columnsOf(tx, "AiUsage")) !== null);
+      check("SourceDocument.removedAt added", (await columnsOf(tx, "SourceDocument")).includes("removedAt"));
       check("SourceProvider has UPLOAD", await enumHas(tx, "SourceProvider", "UPLOAD"));
     },
     async down(tx) {
       const cols = await columnsOf(tx, "User");
       check("User.premiumUntil and timeZone removed", !cols.includes("premiumUntil") && !cols.includes("timeZone"));
       check("PremiumRequest removed", (await columnsOf(tx, "PremiumRequest")) === null);
+      check("AiUsage removed", (await columnsOf(tx, "AiUsage")) === null);
+      check("SourceDocument.removedAt removed", !(await columnsOf(tx, "SourceDocument")).includes("removedAt"));
       check("SourceProvider back to two values", !(await enumHas(tx, "SourceProvider", "UPLOAD")));
     },
   },

@@ -127,21 +127,24 @@ export async function DELETE(req: NextRequest) {
   // Scoped by ownerId as well as id: without it, any signed-in user could
   // delete another user's document by guessing an id.
   const doc = await prisma.sourceDocument.findFirst({
-    where: { id: documentId, ownerId: userId },
+    where: { id: documentId, ownerId: userId, removedAt: null },
     select: { id: true },
   });
   if (!doc) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  if (withCards) {
-    await prisma.sourceDocument.delete({ where: { id: doc.id } });
-  } else {
-    // Detach the topics first so the cascade doesn't take the cards with it.
-    await prisma.topic.updateMany({
-      where: { sourceDocumentId: doc.id, ownerId: userId },
-      data: { sourceDocumentId: null },
-    });
-    await prisma.sourceDocument.delete({ where: { id: doc.id } });
-  }
+  // The row is kept, marked removed: it still counts toward the plan's
+  // document allowance, so removing one can't make room for another while
+  // its cards stay. Importing the same file again revives it.
+  await prisma.$transaction([
+    withCards
+      ? // Deleting the topics cascades to their cards and progress.
+        prisma.topic.deleteMany({ where: { sourceDocumentId: doc.id, ownerId: userId } })
+      : prisma.topic.updateMany({
+          where: { sourceDocumentId: doc.id, ownerId: userId },
+          data: { sourceDocumentId: null },
+        }),
+    prisma.sourceDocument.update({ where: { id: doc.id }, data: { removedAt: new Date() } }),
+  ]);
 
   return NextResponse.json({ ok: true });
 }

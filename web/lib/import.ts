@@ -27,7 +27,6 @@ import { buildCardsFromRows, detectColumns, rowsToMarkdown } from "@/lib/spreads
 import { splitIntoSections, type Section } from "@/lib/sectioner";
 import type { ImportContent } from "@/lib/file-parsers";
 import { DocumentLimitError, getEntitlement } from "@/lib/entitlements";
-import { atLimit } from "@/lib/plans";
 
 /**
  * How long one request may spend generating before it hands back. The route's
@@ -128,8 +127,8 @@ export async function importDocument(
  * Safe to call again: unchanged documents are skipped by revision, cards are
  * de-duplicated by prompt, and an interrupted import resumes at the section it
  * reached. A *new* document beyond the plan's allowance throws
- * DocumentLimitError before anything is written; an existing one is always
- * allowed, since re-importing costs the learner no new document.
+ * DocumentLimitError (its row is removed again); an existing one — including
+ * one the learner removed — is always allowed, since it already counts.
  */
 export async function importFromSource(
   userId: string,
@@ -142,13 +141,12 @@ export async function importFromSource(
   };
   const existing = await prisma.sourceDocument.findUnique({ where: key });
 
-  if (!existing) {
-    const entitlement = await getEntitlement(userId);
-    if (atLimit(entitlement, "documents")) throw new DocumentLimitError(entitlement);
-  }
-
+  // A removed document is never "unchanged": importing it again brings it back.
   const unchanged =
-    existing?.status === "COMPLETE" && existing.revisionId != null && existing.revisionId === ref.revisionId;
+    existing?.status === "COMPLETE" &&
+    existing.removedAt == null &&
+    existing.revisionId != null &&
+    existing.revisionId === ref.revisionId;
 
   if (unchanged) {
     return {
@@ -180,7 +178,7 @@ export async function importFromSource(
       revisionId: ref.revisionId,
     },
     update: resume
-      ? { status: "IMPORTING", lastError: null }
+      ? { status: "IMPORTING", lastError: null, removedAt: null }
       : {
           title: ref.title,
           mimeType: ref.mimeType,
@@ -189,8 +187,20 @@ export async function importFromSource(
           sectionsDone: 0,
           sectionsTotal: 0,
           lastError: null,
+          removedAt: null,
         },
   });
+
+  // A new document is checked against the allowance *after* its row exists
+  // (insert-then-count, as in lib/usage.ts): two imports started at once
+  // can't both see room for one more. The loser's row is removed again.
+  if (!existing) {
+    const entitlement = await getEntitlement(userId);
+    if (!entitlement.admin && entitlement.usage.documents > entitlement.limits.documents) {
+      await prisma.sourceDocument.deleteMany({ where: { id: doc.id, status: "IMPORTING" } });
+      throw new DocumentLimitError(entitlement);
+    }
+  }
 
   try {
     const outcome = resume
@@ -255,7 +265,7 @@ export async function continueImport(
   documentId: string,
   deadline: number = Date.now() + IMPORT_TIME_BUDGET_MS
 ): Promise<ImportOutcome | null> {
-  const doc = await prisma.sourceDocument.findFirst({ where: { id: documentId, ownerId: userId } });
+  const doc = await prisma.sourceDocument.findFirst({ where: { id: documentId, ownerId: userId, removedAt: null } });
   if (!doc) return null;
 
   if (doc.provider === "GOOGLE_DRIVE") return importDocument(userId, doc.externalId, deadline);

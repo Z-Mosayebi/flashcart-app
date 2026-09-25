@@ -139,3 +139,16 @@ export function atLimit(
   if (state.admin) return false;
   return state.usage[kind] >= limitFor(state.limits, kind);
 }
+
+/**
+ * Whether an imported document uses up part of the document allowance.
+ * Removed documents still count (removing one must not make room for
+ * another while its cards stay), but an import that failed without
+ * producing anything does not — it gave the learner nothing.
+ */
+export function countsAsDocument(doc: {
+  status: "PENDING" | "IMPORTING" | "COMPLETE" | "FAILED";
+  topicCount: number;
+}): boolean {
+  return !(doc.status === "FAILED" && doc.topicCount === 0);
+}

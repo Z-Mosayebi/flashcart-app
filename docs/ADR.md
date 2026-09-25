@@ -32,7 +32,7 @@ Each decision uses the same shape: **Context → Decision → Alternatives → C
 | [ADR-012](#adr-012-source-notes-from-google-drive-and-fold-the-connect-step-into-sign-in) | Source notes from Google Drive, folding connect into sign-in | Accepted |
 | [ADR-013](#adr-013-split-documents-on-the-learners-own-headings-before-generating) | Split documents on the learner’s own headings | Accepted |
 | [ADR-014](#adr-014-map-structured-spreadsheets-to-cards-without-a-model) | Map structured spreadsheets to cards without a model | Accepted |
-| [ADR-015](#adr-015-free-demo-limits-counted-from-existing-rows-premium-as-an-end-date) | Free demo limits counted from existing rows; premium as an end date | Accepted |
+| [ADR-015](#adr-015-free-demo-limits-by-reservation-premium-as-an-end-date) | Free demo limits by reservation; premium as an end date | Accepted |
 
 ---
 
@@ -840,7 +840,7 @@ sheet is more likely to be notes than a vocabulary list.
 
 ---
 
-## ADR-015: Free demo limits counted from existing rows; premium as an end date
+## ADR-015: Free demo limits by reservation; premium as an end date
 
 **Status:** Accepted
 
@@ -855,9 +855,14 @@ numbers on who asks and what they would pay.
 
 - **Limits** (in `web/lib/plans.ts`): free accounts get 1 imported document, 30 graded
   answers and 10 tutor replies a day; premium gets 10 / 200 / 50; admins are unlimited.
-- **Usage is counted from rows the app already writes** — `Attempt`, `ASSISTANT`
-  `TutorMessage`, `SourceDocument` — not from a counter table. A model call that fails
-  writes no row, so it never costs the learner allowance.
+- **Each model call reserves a unit first** — an `AiUsage` row is inserted, *then*
+  today's rows are counted, and the call proceeds only if the count is within the
+  limit; otherwise (or if the call fails, or its result is discarded) the row is
+  deleted. Insert-then-count admits at most `limit` callers however requests
+  interleave, with no lock (`web/lib/usage.ts`).
+- **Documents count by row, and removing one keeps the row** (`removedAt`), so removing
+  a document can't make room for another while its cards stay. A failed import that
+  produced nothing doesn't count. New documents use the same insert-then-count check.
 - **"A day" is the learner's own day**: midnight in `User.timeZone`, reported by the
   browser, falling back to Europe/Berlin. The practice streak uses the same calendar.
 - **Premium is one column, `User.premiumUntil`.** Expiry is the date passing; no
@@ -868,8 +873,12 @@ numbers on who asks and what they would pay.
 
 ### Alternatives considered
 
-- **A per-day counter table.** Exact under concurrency. Rejected: a second write on every
-  request, and a counter can drift from reality (incremented, then the model call fails).
+- **Counting rows the app already writes** (`Attempt`, `TutorMessage`). No extra write.
+  Rejected after review: the row is written only after a model call that takes seconds,
+  so parallel requests all see room and the limit has no bound.
+- **A per-user advisory lock around check and call.** Rejected: session locks don't
+  survive a transaction-mode connection pooler, and a transaction held open for a
+  45-second model call ties up scarce free-tier connections.
 - **A subscription/billing provider now.** Rejected until there is evidence of demand;
   premium is free while being tested.
 - **A fixed Berlin midnight for everyone.** Simpler. Rejected: the audience is spread
@@ -877,8 +886,9 @@ numbers on who asks and what they would pay.
 
 ### Consequences
 
-- **Cost:** two perfectly concurrent requests at the limit can both pass, overshooting
-  by one. Acceptable for a demand test.
+- **Cost:** one extra insert (and sometimes a delete) per model call.
+- **Cost:** on the free plan a removed document can't be swapped for another; the
+  learner has to ask for premium.
 - **Cost:** a learner who changes their device's zone can shift one day's reset by a
   few hours.
 - The admin dashboard's "hit a daily limit" count is the main demand signal.

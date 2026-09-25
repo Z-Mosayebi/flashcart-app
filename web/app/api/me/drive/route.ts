@@ -17,7 +17,7 @@ export async function GET() {
   const [conn, documents] = await Promise.all([
     prisma.driveConnection.findUnique({ where: { userId } }),
     prisma.sourceDocument.findMany({
-      where: { ownerId: userId },
+      where: { ownerId: userId, removedAt: null },
       orderBy: { lastSyncedAt: "desc" },
       select: {
         id: true,

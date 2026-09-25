@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PLAN_LIMITS,
   atLimit,
+  countsAsDocument,
   dayKey,
   extendPremium,
   isAdminEmail,
@@ -111,4 +112,16 @@ describe("time zones", () => {
     expect(startOfDay(at("2026-01-15T08:00:00Z"), "Asia/Tehran").toISOString()).toBe(
       "2026-01-14T20:30:00.000Z"
     ));
+});
+
+describe("countsAsDocument", () => {
+  it("counts imported, in-progress and removed documents", () => {
+    expect(countsAsDocument({ status: "COMPLETE", topicCount: 0 })).toBe(true);
+    expect(countsAsDocument({ status: "IMPORTING", topicCount: 0 })).toBe(true);
+    expect(countsAsDocument({ status: "PENDING", topicCount: 2 })).toBe(true);
+  });
+  it("counts a failed import that still produced cards", () =>
+    expect(countsAsDocument({ status: "FAILED", topicCount: 1 })).toBe(true));
+  it("does not count a failed import that produced nothing", () =>
+    expect(countsAsDocument({ status: "FAILED", topicCount: 0 })).toBe(false));
 });

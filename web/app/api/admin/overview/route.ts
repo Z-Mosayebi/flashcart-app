@@ -33,10 +33,14 @@ export async function GET() {
         select: { id: true, name: true, email: true, premiumUntil: true },
       }),
       prisma.user.findMany({ where: { email: { in: adminEmails } }, select: { id: true } }),
-      prisma.attempt.findMany({ where: { createdAt: { gte: since7 } }, select: { userId: true, createdAt: true } }),
-      prisma.tutorMessage.findMany({
-        where: { role: "ASSISTANT", createdAt: { gte: since7 } },
-        select: { createdAt: true, session: { select: { userId: true } } },
+      // The same rows the daily limits are enforced on.
+      prisma.aiUsage.findMany({
+        where: { kind: "GRADED", createdAt: { gte: since7 } },
+        select: { userId: true, createdAt: true },
+      }),
+      prisma.aiUsage.findMany({
+        where: { kind: "TUTOR", createdAt: { gte: since7 } },
+        select: { userId: true, createdAt: true },
       }),
     ]);
 
@@ -44,8 +48,7 @@ export async function GET() {
   const notFree = new Set([...premiumUsers.map((u) => u.id), ...admins.map((u) => u.id)]);
 
   // Each user's rows are bucketed into days in that user's own time zone.
-  const tutorRows = tutorReplies.map((m) => ({ userId: m.session.userId, createdAt: m.createdAt }));
-  const activeIds = Array.from(new Set([...attempts, ...tutorRows].map((r) => r.userId)));
+  const activeIds = Array.from(new Set([...attempts, ...tutorReplies].map((r) => r.userId)));
   const zones = new Map(
     (await prisma.user.findMany({ where: { id: { in: activeIds } }, select: { id: true, timeZone: true } })).map(
       (u) => [u.id, u.timeZone]
@@ -74,7 +77,7 @@ export async function GET() {
       goal: countBy(latest.map((r) => r.goal), GOALS),
       level: countBy(latest.map((r) => r.level), LEVELS),
       hitGradedCap7: usersOverDailyCap(attempts, PLAN_LIMITS.free.gradedPerDay, notFree, zoneOf),
-      hitTutorCap7: usersOverDailyCap(tutorRows, PLAN_LIMITS.free.tutorPerDay, notFree, zoneOf),
+      hitTutorCap7: usersOverDailyCap(tutorReplies, PLAN_LIMITS.free.tutorPerDay, notFree, zoneOf),
     },
   });
 }
