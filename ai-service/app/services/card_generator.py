@@ -83,9 +83,10 @@ Generate the flashcard set now. Aim for thorough coverage: every grammar rule, e
 mistake, every vocabulary item, and every example sentence in the notes should map to at least \
 one card. Return the JSON array only."""
 
-    # A 6k-character section asked for "thorough coverage" routinely needs more
-    # than 4k output tokens; a truncated array used to lose the whole section.
-    raw = ask_json(SYSTEM_PROMPT, user_prompt, max_tokens=8192)
+    # Output is capped deliberately to keep usage inside the free tier. A long
+    # section can still hit the cap; ask_json then keeps every card that was
+    # completed before the cut instead of losing the whole section.
+    raw = ask_json(SYSTEM_PROMPT, user_prompt, max_tokens=4000)
 
     if isinstance(raw, dict) and "cards" in raw:
         raw = raw["cards"]
