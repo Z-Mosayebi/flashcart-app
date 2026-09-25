@@ -137,6 +137,9 @@ appearing, that is your next tutor session.
 
 The starter deck gets you going; your own notes are the point.
 
+Upload a file from your computer (**Settings → Upload from your computer**:
+`.xlsx`, `.csv`, `.docx`, `.txt` or `.md`, up to 2 MB), or import from Drive:
+
 1. Go to **Settings → Your notes → Choose from Drive**.
 2. Pick the document your German notes live in. Search by name if it is not recent.
 3. Press **Import**.
@@ -379,7 +382,42 @@ That restores the previous schema and marks the migration unapplied, so
 a rollback; documents that could not exist in the old schema do not. Restore a
 backup instead when the data matters more than the schema.
 
-### 7. Trying card generation offline (optional)
+### 7. Free plan, premium trials and the admin dashboard
+
+Every account starts on the free plan. Limits reset at midnight in the
+learner's own time zone (reported by their browser):
+
+| | Free | Premium |
+|---|---|---|
+| Imported documents (Drive + upload) | 1 | 10 |
+| Graded answers per day | 30 | 200 |
+| Tutor replies per day | 10 | 50 |
+
+A learner who hits a limit is offered a short request form (`/premium`). Requests
+land in the admin dashboard at `/admin`, where a trial of 7, 14 or 30 days is
+activated with one click. Premium simply ends on its date.
+
+Configure in `web/.env` (and in Vercel for production):
+
+- `ADMIN_EMAILS` — comma-separated emails with access to `/admin` and no limits.
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — optional; new requests are posted to
+  Telegram. Create a bot with @BotFather, message it once, then read your chat id
+  from `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+- `RESEND_API_KEY` (section 5) — optional; new requests are also emailed to
+  `ADMIN_EMAILS`, and learners get an email when their trial starts.
+
+This feature adds the migration `20260926000000_premium_trial`. Apply it before
+deploying the web app that uses it:
+
+```bash
+node scripts/backup_db.mjs
+node scripts/verify_migration.mjs 20260926000000_premium_trial
+cd web && npx prisma migrate deploy
+```
+
+Its reverse is `web/prisma/migrations/20260926000000_premium_trial/down.sql`.
+
+### 8. Trying card generation offline (optional)
 
 To see what the generator makes of a document without running the web app —
 useful when tuning prompts or checking a new kind of notes:
