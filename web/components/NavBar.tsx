@@ -48,12 +48,24 @@ const NAV: NavItem[] = [
   },
 ];
 
+/** Rendered only for admins; everyone else never sees the page exists. */
+const ADMIN_ITEM: NavItem = {
+  href: "/admin",
+  labelKey: "nav.admin",
+  icon: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  ),
+};
+
 export default function NavBar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const { t } = usePreferences();
 
   const signedIn = status === "authenticated";
+  const items = session?.user?.isAdmin ? [...NAV, ADMIN_ITEM] : NAV;
 
   // The marketing page has its own header.
   if (pathname === "/" && !signedIn) return null;
@@ -70,7 +82,7 @@ export default function NavBar() {
           {/* Desktop nav */}
           {signedIn && (
             <nav className="hidden items-center gap-1 sm:flex">
-              {NAV.map((item) => {
+              {items.map((item) => {
                 const active = pathname.startsWith(item.href);
                 return (
                   <Link
@@ -142,7 +154,7 @@ export default function NavBar() {
       {signedIn && (
         <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/90 backdrop-blur-lg sm:hidden">
           <div className="flex">
-            {NAV.map((item) => {
+            {items.map((item) => {
               const active = pathname.startsWith(item.href);
               return (
                 <Link
