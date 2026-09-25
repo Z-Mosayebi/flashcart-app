@@ -20,9 +20,8 @@ export function latestPerUser<R extends { userId: string; createdAt: Date }>(row
 
 /**
  * Distinct users who, on at least one of their own calendar days (in the zone
- * `zoneOf` gives for them), produced `cap` or
- * more rows — i.e. hit a daily limit. The strongest demand signal: they wanted
- * more than the free plan gives.
+ * `zoneOf` gives for them), produced `cap` or more rows — i.e. hit a daily
+ * limit. The strongest demand signal: they wanted more than the free plan gives.
  */
 export function usersOverDailyCap(
   rows: { userId: string; createdAt: Date }[],
