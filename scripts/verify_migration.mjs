@@ -1,5 +1,5 @@
 /**
- * Dry-run the Drive migration and its reverse, without touching real data.
+ * Dry-run a migration and its reverse, without touching real data.
  *
  * Applies the forward migration inside a transaction, checks the resulting
  * schema, applies down.sql, checks the schema is back, then ROLLS BACK — so
@@ -10,7 +10,9 @@
  * the forward one is committed to it.
  *
  * Usage (from the repository root):
- *     node scripts/verify_migration.mjs
+ *     node scripts/verify_migration.mjs [migration_name]
+ *
+ * Without a name it rehearses the Drive migration it was first written for.
  */
 
 import { createRequire } from "module";
@@ -30,10 +32,10 @@ function loadDatabaseUrl() {
 }
 loadDatabaseUrl();
 
-const MIGRATION_DIR = resolve(
-  WEB_DIR,
-  "prisma/migrations/20260902000000_drive_import"
-);
+// Which migration to rehearse. Defaults to the Drive migration this script was
+// written for, so the documented command keeps working.
+const MIGRATION = process.argv[2] ?? "20260902000000_drive_import";
+const MIGRATION_DIR = resolve(WEB_DIR, "prisma/migrations", MIGRATION);
 
 /**
  * Splits a migration file into statements.
@@ -76,6 +78,52 @@ const check = (name, ok, detail = "") => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
+const noChecks = async () => check("no schema checks defined for this migration", false);
+
+/** Whether a Postgres enum type currently has the given label. */
+async function enumHas(tx, type, label) {
+  const [row] = await tx.$queryRawUnsafe(
+    `SELECT COUNT(*)::int AS n FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = $1 AND e.enumlabel = $2`,
+    type,
+    label
+  );
+  return row.n === 1;
+}
+
+/** Schema assertions per migration, after the forward and the reverse step. */
+const CHECKS = {
+  "20260902000000_drive_import": {
+    async up(tx) {
+      const cols = await columnsOf(tx, "SourceDocument");
+      check("externalId replaces notionPageId", cols.includes("externalId") && !cols.includes("notionPageId"));
+      check("progress columns added", ["sectionsDone", "sectionsTotal", "status", "revisionId"].every((c) => cols.includes(c)));
+      check("DriveConnection created", (await columnsOf(tx, "DriveConnection")) !== null);
+      check("NotionConnection dropped", (await columnsOf(tx, "NotionConnection")) === null);
+    },
+    async down(tx) {
+      const cols = await columnsOf(tx, "SourceDocument");
+      check("notionPageId restored", cols.includes("notionPageId") && !cols.includes("externalId"));
+      check("DriveConnection removed", (await columnsOf(tx, "DriveConnection")) === null);
+      check("NotionConnection restored", (await columnsOf(tx, "NotionConnection")) !== null);
+    },
+  },
+  "20260926000000_premium_trial": {
+    async up(tx) {
+      const cols = await columnsOf(tx, "User");
+      check("User.premiumUntil and timeZone added", cols.includes("premiumUntil") && cols.includes("timeZone"));
+      check("PremiumRequest created", (await columnsOf(tx, "PremiumRequest")) !== null);
+      check("SourceProvider has UPLOAD", await enumHas(tx, "SourceProvider", "UPLOAD"));
+    },
+    async down(tx) {
+      const cols = await columnsOf(tx, "User");
+      check("User.premiumUntil and timeZone removed", !cols.includes("premiumUntil") && !cols.includes("timeZone"));
+      check("PremiumRequest removed", (await columnsOf(tx, "PremiumRequest")) === null);
+      check("SourceProvider back to two values", !(await enumHas(tx, "SourceProvider", "UPLOAD")));
+    },
+  },
+};
+
 try {
   await prisma.$transaction(
     async (tx) => {
@@ -83,16 +131,11 @@ try {
       const before = await counts(tx);
       console.log(" ", JSON.stringify(before));
 
-      console.log("\nApplying migration.sql:");
+      console.log(`\nApplying ${MIGRATION}/migration.sql:`);
       for (const sql of statements("migration.sql")) {
         await tx.$executeRawUnsafe(sql);
       }
-
-      const afterCols = await columnsOf(tx, "SourceDocument");
-      check("externalId replaces notionPageId", afterCols.includes("externalId") && !afterCols.includes("notionPageId"));
-      check("progress columns added", ["sectionsDone", "sectionsTotal", "status", "revisionId"].every((c) => afterCols.includes(c)));
-      check("DriveConnection created", (await columnsOf(tx, "DriveConnection")) !== null);
-      check("NotionConnection dropped", (await columnsOf(tx, "NotionConnection")) === null);
+      await (CHECKS[MIGRATION]?.up ?? noChecks)(tx);
 
       const afterUp = await counts(tx);
       check(
@@ -107,11 +150,7 @@ try {
       for (const sql of statements("down.sql")) {
         await tx.$executeRawUnsafe(sql);
       }
-
-      const backCols = await columnsOf(tx, "SourceDocument");
-      check("notionPageId restored", backCols.includes("notionPageId") && !backCols.includes("externalId"));
-      check("DriveConnection removed", (await columnsOf(tx, "DriveConnection")) === null);
-      check("NotionConnection restored", (await columnsOf(tx, "NotionConnection")) !== null);
+      await (CHECKS[MIGRATION]?.down ?? noChecks)(tx);
 
       const afterDown = await counts(tx);
       check(
