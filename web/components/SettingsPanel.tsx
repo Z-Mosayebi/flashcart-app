@@ -55,7 +55,7 @@ function Segmented<T extends string>({
 }
 
 export default function SettingsPanel() {
-  const { t, locale, setLocale, theme, setTheme, autoPlayAudio, setAutoPlayAudio } =
+  const { t, locale, setLocale, theme, setTheme, autoPlayAudio, setAutoPlayAudio, cardSounds, setCardSounds } =
     usePreferences();
   const { data: session } = useSession();
   // Bumped after an upload so the document list below reloads.
@@ -155,6 +155,32 @@ export default function SettingsPanel() {
               className={clsx(
                 "absolute top-1 h-5 w-5 rounded-full bg-white shadow",
                 autoPlayAudio ? "right-1" : "left-1"
+              )}
+            />
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <label htmlFor="card-sounds" className="text-sm">
+            {t("settings.cardSounds")}
+            <span className="block text-xs text-ink-faint">{t("settings.cardSoundsHint")}</span>
+          </label>
+          <button
+            id="card-sounds"
+            role="switch"
+            aria-checked={cardSounds}
+            onClick={() => setCardSounds(!cardSounds)}
+            className={clsx(
+              "relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200",
+              cardSounds ? "bg-brand" : "bg-line"
+            )}
+          >
+            <motion.span
+              layout
+              transition={{ type: "spring", stiffness: 500, damping: 32 }}
+              className={clsx(
+                "absolute top-1 h-5 w-5 rounded-full bg-white shadow",
+                cardSounds ? "right-1" : "left-1"
               )}
             />
           </button>

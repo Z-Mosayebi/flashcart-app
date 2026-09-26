@@ -16,12 +16,15 @@ interface Preferences {
   locale: Locale;
   theme: ThemePref;
   autoPlayAudio: boolean;
+  /** Card-game sound effects in Review (on unless switched off). */
+  cardSounds: boolean;
 }
 
 interface PreferencesContext extends Preferences {
   setLocale: (l: Locale) => void;
   setTheme: (t: ThemePref) => void;
   setAutoPlayAudio: (v: boolean) => void;
+  setCardSounds: (v: boolean) => void;
   /** Translate a key in the active locale. */
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
 }
@@ -55,6 +58,7 @@ export function PreferencesProvider({
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
   const [theme, setThemeState] = useState<ThemePref>("system");
   const [autoPlayAudio, setAutoPlayState] = useState(false);
+  const [cardSounds, setCardSoundsState] = useState(true);
 
   // Hydrate from localStorage on mount.
   useEffect(() => {
@@ -65,6 +69,7 @@ export function PreferencesProvider({
         if (isLocale(saved.locale)) setLocaleState(saved.locale);
         if (saved.theme) setThemeState(saved.theme);
         if (typeof saved.autoPlayAudio === "boolean") setAutoPlayState(saved.autoPlayAudio);
+        if (typeof saved.cardSounds === "boolean") setCardSoundsState(saved.cardSounds);
       }
     } catch {
       /* corrupt storage — fall back to defaults */
@@ -128,6 +133,14 @@ export function PreferencesProvider({
     [persist]
   );
 
+  const setCardSounds = useCallback(
+    (v: boolean) => {
+      setCardSoundsState(v);
+      persist({ cardSounds: v });
+    },
+    [persist]
+  );
+
   const t = useCallback(
     (key: TranslationKey, vars?: Record<string, string | number>) =>
       translate(locale, key, vars),
@@ -136,7 +149,17 @@ export function PreferencesProvider({
 
   return (
     <Ctx.Provider
-      value={{ locale, theme, autoPlayAudio, setLocale, setTheme, setAutoPlayAudio, t }}
+      value={{
+        locale,
+        theme,
+        autoPlayAudio,
+        cardSounds,
+        setLocale,
+        setTheme,
+        setAutoPlayAudio,
+        setCardSounds,
+        t,
+      }}
     >
       {children}
     </Ctx.Provider>
