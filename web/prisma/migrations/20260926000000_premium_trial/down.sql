@@ -10,9 +10,9 @@ BEGIN;
 
 UPDATE "Topic"
    SET "sourceDocumentId" = NULL
- WHERE "sourceDocumentId" IN (SELECT "id" FROM "SourceDocument" WHERE "provider" = 'UPLOAD');
+ WHERE "sourceDocumentId" IN (SELECT "id" FROM "SourceDocument" WHERE "provider"::text = 'UPLOAD');
 
-DELETE FROM "SourceDocument" WHERE "provider" = 'UPLOAD';
+DELETE FROM "SourceDocument" WHERE "provider"::text = 'UPLOAD';
 
 DROP TABLE IF EXISTS "PremiumRequest";
 DROP TABLE IF EXISTS "AiUsage";
