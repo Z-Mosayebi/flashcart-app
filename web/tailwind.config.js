@@ -18,6 +18,7 @@ module.exports = {
         positive: "rgb(var(--positive) / <alpha-value>)",
         caution: "rgb(var(--caution) / <alpha-value>)",
         critical: "rgb(var(--critical) / <alpha-value>)",
+        gold: "rgb(var(--gold) / <alpha-value>)",
         // Leitner box scale
         box1: "#f43f5e",
         box2: "#fb923c",
