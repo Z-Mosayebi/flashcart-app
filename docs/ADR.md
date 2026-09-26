@@ -33,6 +33,7 @@ Each decision uses the same shape: **Context → Decision → Alternatives → C
 | [ADR-013](#adr-013-split-documents-on-the-learners-own-headings-before-generating) | Split documents on the learner’s own headings | Accepted |
 | [ADR-014](#adr-014-map-structured-spreadsheets-to-cards-without-a-model) | Map structured spreadsheets to cards without a model | Accepted |
 | [ADR-015](#adr-015-free-demo-limits-by-reservation-premium-as-an-end-date) | Free demo limits by reservation; premium as an end date | Accepted |
+| [ADR-016](#adr-016-xp-computed-from-records-not-stored) | XP computed from records, not stored | Accepted |
 
 ---
 
@@ -892,6 +893,39 @@ numbers on who asks and what they would pay.
 - **Cost:** a learner who changes their device's zone can shift one day's reset by a
   few hours.
 - The admin dashboard's "hit a daily limit" count is the main demand signal.
+
+---
+
+## ADR-016: XP computed from records, not stored
+
+**Status:** Accepted
+
+### Context
+
+The game layer (levels, daily goal, collection) needs each learner's XP on
+every page. XP depends on rules — how much a first answer, a retry or a
+tutor message is worth — that are likely to be tuned.
+
+### Decision
+
+XP is computed on request from rows the app already writes: attempts (by
+kind and result), tutor messages, mastered tutor sessions, and per-day first
+answers for the daily-goal bonus. Nothing stores an XP total. To weigh
+answers correctly, `Attempt` records its kind: FIRST, RETRY or DONT_KNOW.
+
+### Alternatives considered
+
+- **An XP counter on the user.** One read instead of a few grouped queries.
+  Rejected: it drifts from reality (a failed write, a rule change), and
+  changing the rules would need a backfill.
+
+### Consequences
+
+- Changing an XP rule re-scores everyone correctly, instantly.
+- **Cost:** a handful of aggregate queries per progress read (the HUD
+  refetches after each answer). Fine at current scale; cache if it grows.
+- **Cost:** the goal bonus counts past days against the *current* goal, so
+  changing the goal re-evaluates history.
 
 ---
 
