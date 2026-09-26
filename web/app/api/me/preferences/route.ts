@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/auth";
 import { preferencesUpdate } from "@/lib/preferences";
 import { getEntitlement } from "@/lib/entitlements";
 import { goalAllowed } from "@/lib/game";
+import { awardGoalDayIfReached } from "@/lib/goal-award";
 
 /**
  * PATCH /api/me/preferences — persist interface language and/or time zone.
@@ -35,6 +36,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   await prisma.user.update({ where: { id: userId }, data: update });
+  // Lowering the goal below today's answers reaches it right now.
+  if (update.dailyGoal !== undefined) await awardGoalDayIfReached(userId);
 
   return NextResponse.json({ ok: true });
 }

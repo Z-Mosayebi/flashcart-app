@@ -4,12 +4,12 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { dayKey, resolveTimeZone } from "@/lib/plans";
+import { resolveTimeZone } from "@/lib/plans";
+import { answersToday } from "@/lib/goal-award";
 import { computeStreak } from "@/lib/streak";
 import {
   DEFAULT_DAILY_GOAL,
   collectionFromBoxes,
-  goalDays,
   levelProgress,
   xpFromCounts,
   type Collection,
@@ -46,31 +46,28 @@ export async function getProgress(userId: string, now: Date = new Date()): Promi
   const tz = resolveTimeZone(user?.timeZone);
   const goal = user?.dailyGoal ?? DEFAULT_DAILY_GOAL;
 
-  const [groups, tutorMessages, topicsMastered, perDay, boxes, owned, recent, dueSeen] = await Promise.all([
-    prisma.attempt.groupBy({ by: ["kind", "result"], where: { userId }, _count: { _all: true } }),
-    prisma.tutorMessage.count({ where: { role: "USER", session: { userId } } }),
-    prisma.tutorSession.count({ where: { userId, mastered: true } }),
-    // First answers per user-local day, for today's goal and the goal bonus.
-    prisma.$queryRaw<{ day: string; n: number }[]>`
-      SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${tz}, 'YYYY-MM-DD') AS day,
-             COUNT(*)::int AS n
-        FROM "Attempt"
-       WHERE "userId" = ${userId} AND "kind"::text IN ('FIRST', 'DONT_KNOW')
-       GROUP BY 1`,
-    prisma.cardProgress.findMany({ where: { userId }, select: { box: true } }),
-    prisma.card.count({ where: { ownerId: userId } }),
-    prisma.attempt.findMany({ where: { userId }, select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 500 }),
-    prisma.cardProgress.count({ where: { userId, dueAt: { lte: now } } }),
-  ]);
+  const [groups, tutorMessages, topicsMastered, goalDayCount, today, boxes, owned, recent, dueSeen] =
+    await Promise.all([
+      prisma.attempt.groupBy({ by: ["kind", "result"], where: { userId }, _count: { _all: true } }),
+      prisma.tutorMessage.count({ where: { role: "USER", session: { userId } } }),
+      prisma.tutorSession.count({ where: { userId, mastered: true } }),
+      // Goal days are recorded once when reached (lib/goal-award.ts), so
+      // changing the goal later never re-scores the past.
+      prisma.goalDay.count({ where: { userId } }),
+      answersToday(userId, tz, now),
+      prisma.cardProgress.findMany({ where: { userId }, select: { box: true } }),
+      prisma.card.count({ where: { ownerId: userId } }),
+      prisma.attempt.findMany({ where: { userId }, select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 500 }),
+      prisma.cardProgress.count({ where: { userId, dueAt: { lte: now } } }),
+    ]);
 
   const xp = xpFromCounts({
     ...countsFromGroups(groups as unknown as AttemptGroup[]),
     tutorMessages,
     topicsMastered,
-    goalDays: goalDays(perDay.map((d) => d.n), goal),
+    goalDays: goalDayCount,
   });
   const collection = collectionFromBoxes(boxes.map((b) => b.box), owned);
-  const today = perDay.find((d) => d.day === dayKey(now, tz))?.n ?? 0;
 
   return {
     xp,

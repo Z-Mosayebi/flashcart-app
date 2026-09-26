@@ -13,9 +13,10 @@
     --ink-muted: 88 94 122;
     --ink-faint: 139 143 166;
     --brand: 98 80 224;
-    --brand-2: 142 125 255;
+    --brand-2: 112 88 236;
     --brand-soft: 238 235 255;
-    --gold: 190 140 40;
+    /* Dark enough for gold text (XP, badges) to read on cream and white. */
+    --gold: 140 100 20;
     --glow: 255 243 214;
     --positive: 4 120 87;
     --caution: 180 83 9;
@@ -32,7 +33,7 @@
     --ink-muted: 182 190 216;
     --ink-faint: 130 140 175;
     --brand: 104 86 230;
-    --brand-2: 170 110 250;
+    --brand-2: 140 80 230;
     --brand-soft: 42 36 92;
     --gold: 232 198 90;
     --glow: 29 33 64;
@@ -117,7 +118,7 @@
     --ink-muted: 182 190 216;
     --ink-faint: 130 140 175;
     --brand: 104 86 230;
-    --brand-2: 170 110 250;
+    --brand-2: 140 80 230;
     --gold: 232 198 90;
     --brand-soft: 42 36 92;
     --positive: 52 211 153;

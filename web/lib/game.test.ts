@@ -3,6 +3,7 @@ import {
   collectionFromBoxes,
   goalAllowed,
   goalDays,
+  goalReached,
   isDailyGoal,
   isLevelUp,
   levelForXp,
@@ -76,5 +77,13 @@ describe("isLevelUp", () => {
     expect(isLevelUp(4, 5)).toBe(true);
     expect(isLevelUp(5, 5)).toBe(false);
     expect(isLevelUp(5, 4)).toBe(false);
+  });
+});
+
+describe("goalReached", () => {
+  it("is reached exactly at the goal", () => {
+    expect(goalReached(9, 10)).toBe(false);
+    expect(goalReached(10, 10)).toBe(true);
+    expect(goalReached(12, 10)).toBe(true);
   });
 });

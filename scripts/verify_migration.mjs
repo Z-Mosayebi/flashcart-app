@@ -118,10 +118,12 @@ const CHECKS = {
            FROM "Attempt"`
       );
       check("old 'I don't know' answers marked DONT_KNOW", row.dk === row.marked, JSON.stringify(row));
+      check("GoalDay created", (await columnsOf(tx, "GoalDay")) !== null);
     },
     async down(tx) {
       check("User.dailyGoal removed", !(await columnsOf(tx, "User")).includes("dailyGoal"));
       check("Attempt.kind removed", !(await columnsOf(tx, "Attempt")).includes("kind"));
+      check("GoalDay removed", (await columnsOf(tx, "GoalDay")) === null);
     },
   },
   "20260927000000_user_blocking": {

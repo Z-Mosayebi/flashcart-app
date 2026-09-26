@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { evaluateAnswer } from "@/lib/ai";
 import { recordFirstAnswer } from "@/lib/review-record";
+import { awardGoalDayIfReached } from "@/lib/goal-award";
 import { shouldReveal } from "@/lib/review-flow";
 import { requireUserId } from "@/lib/auth";
 import { reserveAiCall } from "@/lib/entitlements";
@@ -113,6 +114,7 @@ export async function POST(req: NextRequest) {
     await reservation.release();
     return NextResponse.json({ error: "already_reviewed" }, { status: 409 });
   }
+  await awardGoalDayIfReached(userId);
 
   // The reference answer is only sent once the card is finished: after a
   // correct answer, after the retry, or when the learner said they didn't

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
 import { recordFirstAnswer } from "@/lib/review-record";
+import { awardGoalDayIfReached } from "@/lib/goal-award";
 
 /**
  * POST /api/review/dont-know — body { cardId }.
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
     kind: "DONT_KNOW",
   });
   if (!outcome.ok) return NextResponse.json({ error: "already_reviewed" }, { status: 409 });
+  await awardGoalDayIfReached(userId);
 
   return NextResponse.json({ progress: outcome.progress, reveal: card });
 }

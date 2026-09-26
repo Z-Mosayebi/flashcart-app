@@ -72,6 +72,11 @@ export function goalAllowed(goal: DailyGoal, who: { premium: boolean; admin: boo
   return goal !== PREMIUM_ONLY_GOAL || who.premium || who.admin;
 }
 
+/** Whether today's answers meet the goal (when a GoalDay is recorded). */
+export function goalReached(done: number, goal: number): boolean {
+  return done >= goal;
+}
+
 export function goalDays(dayCounts: number[], goal: number): number {
   return dayCounts.filter((n) => n >= goal).length;
 }

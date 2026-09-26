@@ -24,7 +24,7 @@ export default function GameHud() {
         <div className="card-surface flex items-center gap-3 px-3 py-2">
           <div className="relative shrink-0">
             <UserAvatar name={session?.user?.name} email={session?.user?.email} image={session?.user?.image} size={34} />
-            <span className="absolute -bottom-1 -right-2 rounded-full bg-gold px-1.5 text-[9px] font-extrabold text-[#221700]">
+            <span className="absolute -bottom-1 -right-2 rounded-full bg-gold px-1.5 text-[9px] font-extrabold text-canvas">
               {t("game.lvShort", { n: progress.level })}
             </span>
           </div>

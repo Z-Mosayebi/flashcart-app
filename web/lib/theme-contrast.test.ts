@@ -35,4 +35,10 @@ describe.each([[":root"], [".dark"]])("%s game palette", (sel) => {
   });
   it("keeps white button text readable on the brand colour", () =>
     expect(contrast([255, 255, 255], t.brand)).toBeGreaterThanOrEqual(4.5));
+  it("keeps white button text readable across the whole button gradient", () =>
+    expect(contrast([255, 255, 255], t["brand-2"])).toBeGreaterThanOrEqual(4.5));
+  it("keeps gold text (XP, badges) readable on the page and on panels", () => {
+    expect(contrast(t.gold, t.canvas)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(t.gold, t.surface)).toBeGreaterThanOrEqual(4.5);
+  });
 });
