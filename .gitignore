@@ -33,3 +33,6 @@ npm-debug.log*
 
 # Database backups — may contain personal data and secrets
 backups/
+
+# Brainstorming mockups and plan workspaces (local only)
+.superpowers/
