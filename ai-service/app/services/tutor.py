@@ -11,6 +11,28 @@ so grading is delegated to the model with explicit grading criteria.
 from app.models.schemas import EvaluateAnswerRequest, EvaluateAnswerResponse
 from app.services.llm_client import ask_json
 
+# The tags the review screen can explain (web/lib/error-tags.ts GRADER_TAGS).
+# A tag outside this list would reach the learner with no explanation.
+ERROR_TAGS = [
+    "word-order",
+    "case-declension",
+    "verb-conjugation",
+    "verb-tense",
+    "preposition-choice",
+    "article-agreement",
+    "gender-agreement",
+    "wrong-verb-position",
+    "spelling",
+    "vocabulary",
+    "punctuation",
+    "capitalization",
+    "adjective-ending",
+    "plural-form",
+    "separable-verb",
+    "off-topic",
+    "missing-element",
+]
+
 SYSTEM_PROMPT = """You are a strict but encouraging German grammar tutor grading a learner's \
 answer to a flashcard. You will be given the card's prompt, the expected/reference answer, the \
 grammar pattern being tested (if any), and the learner's actual answer.
@@ -29,9 +51,8 @@ seems to be for THIS learner based on this one answer: 0.0 = clearly mastered/ea
 1.0 = clearly still struggling. Base this on the presence/severity of errors, not on how hard the \
 pattern is in the abstract.
 
-Also produce 0-3 short "errorTags" using short kebab-case labels for the KIND of mistake, e.g.: \
-"word-order", "case-declension", "verb-conjugation", "preposition-choice", "article-agreement", \
-"gender-agreement", "wrong-verb-position", "spelling", "missing-element". Empty array if correct \
+Also produce 0-3 "errorTags" naming the KIND of mistake. Use ONLY tags from this list, \
+exactly as written: __TAGS__. Pick the closest one; never invent a new tag. Empty array if correct \
 with no notable issues.
 
 Write "feedback" as 1-3 sentences, direct and specific, in English, addressed to the learner \
@@ -49,7 +70,7 @@ Return ONLY a JSON object of this exact shape, no prose, no markdown fences:
   "errorTags": string[],
   "difficulty": number
 }
-"""
+""".replace("__TAGS__", ", ".join(f'"{t}"' for t in ERROR_TAGS))
 
 
 def evaluate_answer(req: EvaluateAnswerRequest) -> EvaluateAnswerResponse:

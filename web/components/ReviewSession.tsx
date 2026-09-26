@@ -11,6 +11,7 @@ import ErrorTags from "@/components/ErrorTags";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
+import { afterAnswer, verdictLabelKey } from "@/lib/review-flow";
 
 interface Card {
   id: string;
@@ -43,17 +44,14 @@ const RESULT_STYLES = {
   CORRECT: {
     wrap: "border-positive/30 bg-positive/10",
     text: "text-positive",
-    labelKey: "review.correct",
   },
   PARTIAL: {
     wrap: "border-caution/30 bg-caution/10",
     text: "text-caution",
-    labelKey: "review.partial",
   },
   INCORRECT: {
     wrap: "border-critical/30 bg-critical/10",
     text: "text-critical",
-    labelKey: "review.incorrect",
   },
 } as const;
 
@@ -66,6 +64,10 @@ export default function ReviewSession() {
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [limit, setLimit] = useState<LimitHit | null>(null);
+  // answer → (wrong) retry-offered → retry → done; a right answer goes straight to done.
+  const [stage, setStage] = useState<"answer" | "retry-offered" | "retry" | "done">("answer");
+  // The first attempt's verdict, kept on screen while the learner retries.
+  const [firstTry, setFirstTry] = useState<Evaluation | null>(null);
   const { plan, reload } = usePlan();
   const [submitting, setSubmitting] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -106,7 +108,7 @@ export default function ReviewSession() {
       const res = await fetch("/api/review/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardId: current.card.id, userAnswer: answer }),
+        body: JSON.stringify({ cardId: current.card.id, userAnswer: answer, retry: stage === "retry" }),
       });
       if (res.status === 409) {
         // Already graded from another tab or a double submit; move on rather
@@ -121,11 +123,16 @@ export default function ReviewSession() {
       }
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
+      const isRetry = stage === "retry";
       setEvaluation(data.evaluation);
       setReveal(data.reveal ?? null);
+      setStage(afterAnswer(data.evaluation.result, isRetry));
       reload();
-      setReviewed((n) => n + 1);
-      if (data.evaluation?.result === "CORRECT") setCorrect((n) => n + 1);
+      // The session tally, like the Leitner box, reflects the first answer.
+      if (!isRetry) {
+        setReviewed((n) => n + 1);
+        if (data.evaluation?.result === "CORRECT") setCorrect((n) => n + 1);
+      }
     } catch {
       setError(t("common.error"));
     } finally {
@@ -133,8 +140,34 @@ export default function ReviewSession() {
     }
   }
 
+  /** Use the one retry: keep the first feedback visible, clear the answer box. */
+  function tryAgain() {
+    setFirstTry(evaluation);
+    setEvaluation(null);
+    setAnswer("");
+    setStage("retry");
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
+  /** Skip the retry and see the reference answer. */
+  async function showAnswer() {
+    if (!current) return;
+    setError(null);
+    try {
+      const res = await fetch(`/api/cards/${current.card.id}/reveal`);
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      setReveal(data.reveal);
+      setStage("done");
+    } catch {
+      setError(t("common.error"));
+    }
+  }
+
   function next() {
     setQueue((q) => q.slice(1));
+    setStage("answer");
+    setFirstTry(null);
     setAnswer("");
     setEvaluation(null);
     setReveal(null);
@@ -294,6 +327,18 @@ export default function ReviewSession() {
 
             {!evaluation ? (
               <>
+                {/* On the retry, the first verdict stays visible as guidance. */}
+                {stage === "retry" && firstTry && (
+                  <div className="rounded-xl border border-line px-4 py-3">
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      {t("review.secondTry")}
+                    </p>
+                    <p className="text-sm leading-relaxed text-ink-muted">
+                      <RichText text={firstTry.feedback} />
+                    </p>
+                    <ErrorTags tags={firstTry.errorTags} />
+                  </div>
+                )}
                 <textarea
                   ref={inputRef}
                   maxLength={2000}
@@ -336,7 +381,7 @@ export default function ReviewSession() {
                 {/* Verdict */}
                 <div className={clsx("rounded-xl border px-4 py-3", style!.wrap)}>
                   <p className={clsx("mb-1 text-sm font-semibold", style!.text)}>
-                    {t(style!.labelKey as "review.correct")}
+                    {t(verdictLabelKey(evaluation.result, stage === "done"))}
                   </p>
                   <p className="text-sm leading-relaxed text-ink">
                     <RichText text={evaluation.feedback} />
@@ -381,14 +426,31 @@ export default function ReviewSession() {
           button stays in reach. On phones it sits above the bottom nav. */}
       {evaluation && (
         <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 -mx-4 bg-gradient-to-t from-canvas via-canvas/95 to-transparent px-4 pb-2 pt-6 sm:bottom-4 sm:mx-0 sm:px-0">
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={next}
-            autoFocus
-            className="btn-primary w-full shadow-lg sm:w-auto"
-          >
-            {t("review.next")}
-          </motion.button>
+          {stage === "retry-offered" ? (
+            // Full-width, stacked on phones; side by side from sm up.
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={tryAgain}
+                autoFocus
+                className="btn-primary w-full shadow-lg sm:w-auto"
+              >
+                {t("review.tryAgain")}
+              </motion.button>
+              <button onClick={() => void showAnswer()} className="btn-ghost w-full bg-canvas sm:w-auto">
+                {t("review.showAnswer")}
+              </button>
+            </div>
+          ) : (
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={next}
+              autoFocus
+              className="btn-primary w-full shadow-lg sm:w-auto"
+            >
+              {t("review.next")}
+            </motion.button>
+          )}
         </div>
       )}
     </div>

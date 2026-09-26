@@ -122,3 +122,22 @@ def test_oversized_answer_is_rejected(monkeypatch):
         json={"cardPrompt": "p", "expectedAnswer": "a", "userAnswer": "x" * 2_001},
     )
     assert res.status_code == 422
+
+
+# Must match GRADER_TAGS in web/lib/error-tags.ts: the review screen explains
+# exactly these, so a tag outside the list would show no explanation.
+GRADER_TAGS = [
+    "word-order", "case-declension", "verb-conjugation", "verb-tense", "preposition-choice",
+    "article-agreement", "gender-agreement", "wrong-verb-position", "spelling", "vocabulary",
+    "punctuation", "capitalization", "adjective-ending", "plural-form", "separable-verb",
+    "off-topic", "missing-element",
+]
+
+
+def test_grader_is_limited_to_the_explained_tags():
+    from app.services.tutor import ERROR_TAGS, SYSTEM_PROMPT
+
+    assert sorted(ERROR_TAGS) == sorted(GRADER_TAGS)
+    for tag in GRADER_TAGS:
+        assert f'"{tag}"' in SYSTEM_PROMPT
+    assert "ONLY" in SYSTEM_PROMPT.split("errorTags")[1]

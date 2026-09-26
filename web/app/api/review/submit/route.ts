@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { evaluateAnswer } from "@/lib/ai";
 import { scheduleNextReview } from "@/lib/leitner";
+import { shouldReveal } from "@/lib/review-flow";
 import { requireUserId } from "@/lib/auth";
 import { reserveAiCall } from "@/lib/entitlements";
 
@@ -20,19 +21,24 @@ const MAX_ANSWER_CHARS = 2_000;
  *  3. Run the Leitner scheduler (box + AI-difficulty blended) to compute the next due date.
  *  4. In one transaction, update CardProgress (rejecting a concurrent duplicate review
  *     with 409) and persist the Attempt for the error log / dashboard.
- *  5. Return feedback, next-review info, and the now-revealed reference answer.
+ *  5. Return feedback, next-review info, and — once the card is finished — the
+ *     reference answer. A wrong first answer gets one retry (body.retry = true)
+ *     that is graded and logged but doesn't reschedule the card.
  */
 export async function POST(req: NextRequest) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  let body: { cardId?: unknown; userAnswer?: unknown };
+  let body: { cardId?: unknown; userAnswer?: unknown; retry?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
   const { cardId, userAnswer } = body;
+  // The one retry after a wrong first answer: graded and logged, but it
+  // never moves the card between boxes (see lib/review-flow.ts).
+  const isRetry = body.retry === true;
 
   if (typeof cardId !== "string" || !cardId || typeof userAnswer !== "string" || !userAnswer.trim()) {
     return NextResponse.json({ error: "cardId and userAnswer are required" }, { status: 400 });
@@ -72,6 +78,23 @@ export async function POST(req: NextRequest) {
     console.error("evaluateAnswer failed", err);
     await reservation.release();
     return NextResponse.json({ error: "ai_unavailable" }, { status: 503 });
+  }
+
+  if (isRetry) {
+    await prisma.attempt.create({
+      data: {
+        userId,
+        cardId,
+        userAnswer,
+        result: evaluation.result,
+        aiFeedback: evaluation.feedback,
+        errorTags: evaluation.errorTags,
+      },
+    });
+    return NextResponse.json({
+      evaluation,
+      reveal: { answer: card.answer, explanation: card.explanation },
+    });
   }
 
   const { nextBox, dueAt } = scheduleNextReview({
@@ -147,12 +170,15 @@ export async function POST(req: NextRequest) {
     throw err;
   }
 
-  // The reference answer is only sent once the learner has committed to theirs;
-  // the due-cards endpoint deliberately leaves it out.
+  // The reference answer is only sent once the card is finished: after a
+  // correct answer, or after the retry. A wrong first answer keeps it back so
+  // the retry is a real attempt. The due-cards endpoint never includes it.
   return NextResponse.json({
     evaluation,
     progress,
-    reveal: { answer: card.answer, explanation: card.explanation },
+    reveal: shouldReveal(evaluation.result, false)
+      ? { answer: card.answer, explanation: card.explanation }
+      : null,
   });
 }
 
