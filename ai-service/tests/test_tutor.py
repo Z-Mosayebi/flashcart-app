@@ -175,3 +175,55 @@ def test_prompt_teaches_instead_of_critiquing_a_give_up():
 
     assert '"gaveUp"' in SYSTEM_PROMPT
     assert "don't know" in SYSTEM_PROMPT
+
+
+@patch("app.services.tutor.ask_json")
+def test_first_answer_feedback_never_gives_away_the_answer(mock_ask_json):
+    """A retry follows a wrong first answer, so the answer must stay hidden."""
+    mock_ask_json.return_value = {
+        "result": "INCORRECT",
+        "feedback": "The correct answer is 'Anbindung'. Remember: 'an + Akkusativ'.",
+        "errorTags": ["vocabulary"],
+        "difficulty": 0.8,
+    }
+    req = EvaluateAnswerRequest(
+        cardPrompt="Wie ist denn da die ___ an den Flughafen?",
+        expectedAnswer="Anbindung",
+        userAnswer="Verbindung",
+        revealAnswer=False,
+    )
+    result = evaluate_answer(req)
+    assert "anbindung" not in result.feedback.lower()
+    assert "an + Akkusativ" in result.feedback
+
+
+@patch("app.services.tutor.ask_json")
+def test_feedback_may_name_the_answer_after_the_retry(mock_ask_json):
+    mock_ask_json.return_value = {
+        "result": "INCORRECT",
+        "feedback": "The correct answer is 'Anbindung'.",
+        "errorTags": [],
+        "difficulty": 0.8,
+    }
+    req = EvaluateAnswerRequest(cardPrompt="…", expectedAnswer="Anbindung", userAnswer="x", revealAnswer=True)
+    assert "Anbindung" in evaluate_answer(req).feedback
+
+
+@patch("app.services.tutor.ask_json")
+def test_a_give_up_is_taught_with_the_answer(mock_ask_json):
+    """'I forget' skips the retry, so teaching with the answer is right."""
+    mock_ask_json.return_value = {
+        "result": "INCORRECT",
+        "feedback": "It is 'Anbindung an + Akkusativ'.",
+        "errorTags": [],
+        "difficulty": 1.0,
+        "gaveUp": True,
+    }
+    req = EvaluateAnswerRequest(cardPrompt="…", expectedAnswer="Anbindung", userAnswer="I forget", revealAnswer=False)
+    assert "Anbindung" in evaluate_answer(req).feedback
+
+
+def test_prompt_forbids_revealing_before_the_retry():
+    from app.services.tutor import SYSTEM_PROMPT
+
+    assert "Reveal answer" in SYSTEM_PROMPT

@@ -58,6 +58,9 @@ class EvaluateAnswerRequest(BaseModel):
     user_answer: str = Field(..., alias="userAnswer", max_length=MAX_ANSWER_CHARS)
     grammar_pattern: Optional[str] = Field(None, alias="grammarPattern")
     explanation: Optional[str] = None
+    # False while a retry is still possible: the feedback must not give the
+    # answer away. Defaults to True for callers that predate the retry.
+    reveal_answer: bool = Field(True, alias="revealAnswer")
 
 
 class EvaluateAnswerResponse(BaseModel):
