@@ -72,6 +72,9 @@ export async function POST(req: NextRequest) {
       userAnswer,
       grammarPattern: card.topic.pattern ?? undefined,
       explanation: card.explanation ?? undefined,
+      // A wrong first answer earns a retry, so its feedback mustn't reveal the
+      // answer; on the retry itself it may.
+      revealAnswer: isRetry,
     });
   } catch (err) {
     // The AI service being down shouldn't look like a client bug.

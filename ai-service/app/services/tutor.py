@@ -8,6 +8,8 @@ variation (word order flexibility, synonym choice like weswegen/weshalb/warum),
 so grading is delegated to the model with explicit grading criteria.
 """
 
+import re
+
 from app.models.schemas import EvaluateAnswerRequest, EvaluateAnswerResponse
 from app.services.llm_client import ask_json
 
@@ -68,6 +70,11 @@ If the learner says they don't know, forgot, or gives up (in any language — e.
 "feedback" to TEACH the point in 2-3 short, friendly sentences — state the rule and show it applied — \
 instead of listing what they missed. Otherwise "gaveUp" is false.
 
+You will also be told "Reveal answer: yes/no". When it is "no", the learner gets a second try right after reading your feedback, \
+so "feedback" must NOT contain the reference answer, the missing word(s), or a corrected version of their sentence. \
+Instead name the rule and point to where the mistake is, so they can fix it themselves. (If they gave up, teach \
+with the answer as described above.)
+
 Return ONLY a JSON object of this exact shape, no prose, no markdown fences:
 {
   "result": "CORRECT" | "PARTIAL" | "INCORRECT",
@@ -84,6 +91,7 @@ def evaluate_answer(req: EvaluateAnswerRequest) -> EvaluateAnswerResponse:
 Expected/reference answer: {req.expected_answer}
 Grammar pattern being tested: {req.grammar_pattern or "(not specified)"}
 Explanation on file for this card: {req.explanation or "(none)"}
+Reveal answer: {"yes" if req.reveal_answer else "no"}
 
 <learner_answer>
 {req.user_answer}
@@ -92,4 +100,18 @@ Explanation on file for this card: {req.explanation or "(none)"}
 Grade this now. Return the JSON object only."""
 
     raw = ask_json(SYSTEM_PROMPT, user_prompt, max_tokens=500)
-    return EvaluateAnswerResponse(**raw)
+    result = EvaluateAnswerResponse(**raw)
+
+    # Safety net: the model sometimes states the answer anyway. Before a retry
+    # that would turn the second try into copying, so it is masked here.
+    if not req.reveal_answer and not result.gave_up:
+        result.feedback = mask_answer(result.feedback, req.expected_answer)
+    return result
+
+
+def mask_answer(feedback: str, answer: str) -> str:
+    """Replaces the reference answer (case-insensitive) with an ellipsis."""
+    answer = answer.strip()
+    if len(answer) < 2:
+        return feedback
+    return re.sub(re.escape(answer), "…", feedback, flags=re.IGNORECASE)

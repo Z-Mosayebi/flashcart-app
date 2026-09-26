@@ -63,6 +63,8 @@ export interface EvaluateAnswerRequest {
   userAnswer: string;
   grammarPattern?: string;
   explanation?: string;
+  /** False while a retry is still possible: the feedback must not give the answer away. */
+  revealAnswer?: boolean;
 }
 
 export interface EvaluateAnswerResponse {
