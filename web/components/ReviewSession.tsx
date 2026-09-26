@@ -488,7 +488,7 @@ export default function ReviewSession() {
       {/* When one explanation isn't enough: practise the same topic. */}
       {stage === "done" && evaluation.result !== "CORRECT" && (
         <Link
-          href={`/tutor?topic=${encodeURIComponent(current.card.topic.id)}`}
+          href={`/tutor?topic=${encodeURIComponent(current.card.topic.id)}&card=${encodeURIComponent(current.card.id)}`}
           className="inline-flex min-h-10 items-center text-sm font-medium text-brand underline-offset-4 hover:underline"
         >
           {t("review.practiseTopic")} →

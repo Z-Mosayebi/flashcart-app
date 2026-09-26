@@ -43,9 +43,23 @@ Return ONLY a JSON object of this exact shape, no prose, no markdown fences:
 def chat_turn(req: TutorChatRequest) -> TutorChatResponse:
     history_text = "\n".join(f"{m.role}: {m.content}" for m in req.history)
 
+    focus_text = ""
+    if req.focus:
+        f = req.focus
+        focus_text = f"""
+The learner opened this session from a flashcard they just got wrong. Start with this card, not a
+general question: in 1-2 sentences explain the point they missed, then ask them to produce a new,
+similar sentence that practises exactly that point. Keep later questions on the same point until
+they get it right.
+  Card: {f.card_prompt}
+  Correct answer: {f.expected_answer}
+  Their answer: {f.learner_answer or "(they didn't know)"}
+  Feedback they saw: {f.feedback or "(none)"}
+"""
+
     user_prompt = f"""Topic: {req.topic_name}
 Pattern/formula: {req.topic_pattern or "(not specified — use general knowledge of this topic)"}
-
+{focus_text}
 Conversation so far:
 {history_text or "(this is the first message — greet briefly and give the first prompt)"}
 

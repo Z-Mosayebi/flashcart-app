@@ -105,11 +105,20 @@ export interface TutorChatMessage {
   content: string;
 }
 
+/** The flashcard a learner just missed, when they open the tutor from it. */
+export interface TutorFocus {
+  cardPrompt: string;
+  expectedAnswer: string;
+  learnerAnswer?: string;
+  feedback?: string;
+}
+
 export interface TutorChatRequest {
   topicName: string;
   topicPattern?: string;
   history: TutorChatMessage[];
   userMessage: string;
+  focus?: TutorFocus;
 }
 
 export interface TutorChatResponse {
