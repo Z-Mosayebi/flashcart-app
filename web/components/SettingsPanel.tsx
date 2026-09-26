@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
@@ -8,6 +9,8 @@ import { LOCALES, LOCALE_LABELS, Locale } from "@/lib/i18n";
 import SpeakButton from "@/components/SpeakButton";
 import DriveConnect from "@/components/DriveConnect";
 import UserAvatar from "@/components/UserAvatar";
+import PlanCard from "@/components/PlanCard";
+import UploadPanel from "@/components/UploadPanel";
 
 /** Segmented control used for both language and theme. */
 function Segmented<T extends string>({
@@ -55,6 +58,8 @@ export default function SettingsPanel() {
   const { t, locale, setLocale, theme, setTheme, autoPlayAudio, setAutoPlayAudio } =
     usePreferences();
   const { data: session } = useSession();
+  // Bumped after an upload so the document list below reloads.
+  const [docsVersion, setDocsVersion] = useState(0);
 
   return (
     <div className="space-y-6">
@@ -79,9 +84,19 @@ export default function SettingsPanel() {
         </section>
       )}
 
-      {/* Drive — the content source, so it leads. */}
+      {/* Plan — what this account can do, and the way to more. */}
       <section className="card-surface p-5 sm:p-6">
-        <DriveConnect />
+        <PlanCard />
+      </section>
+
+      {/* Content sources: a file from the computer works for everyone; Drive
+          needs Google access. Both lists of documents live in the Drive panel. */}
+      <section className="card-surface p-5 sm:p-6">
+        <UploadPanel onImported={() => setDocsVersion((v) => v + 1)} />
+      </section>
+
+      <section className="card-surface p-5 sm:p-6">
+        <DriveConnect refreshKey={docsVersion} />
       </section>
 
       {/* Interface language */}

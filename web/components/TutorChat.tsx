@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
 import SpeakButton from "@/components/SpeakButton";
+import UpgradePrompt from "@/components/UpgradePrompt";
+import UsageMeter from "@/components/UsageMeter";
+import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 
 interface Topic {
   id: string;
@@ -37,6 +40,8 @@ export default function TutorChat() {
   const [sending, setSending] = useState(false);
   const [mastered, setMastered] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limit, setLimit] = useState<LimitHit | null>(null);
+  const { plan, reload } = usePlan();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -69,19 +74,25 @@ export default function TutorChat() {
             message: text,
           }),
         });
+        const hit = await readLimitHit(res);
+        if (hit) {
+          setLimit(hit);
+          return;
+        }
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
 
         setSessionId(data.sessionId);
         setMessages((m) => [...m, { id: nextId(), role: "assistant", content: data.reply }]);
         if (data.mastered) setMastered(true);
+        reload();
       } catch {
         setError(t("common.error"));
       } finally {
         setSending(false);
       }
     },
-    [t]
+    [t, reload]
   );
 
   function startSession(chosen: Topic) {
@@ -108,6 +119,7 @@ export default function TutorChat() {
     setSessionId(null);
     setMastered(false);
     setError(null);
+    setLimit(null);
   }
 
   // ---------- Topic picker ----------
@@ -172,9 +184,12 @@ export default function TutorChat() {
             <p className="truncate text-sm text-ink-muted text-german">{topic.pattern}</p>
           )}
         </div>
-        <button onClick={reset} className="shrink-0 text-sm text-ink-muted hover:text-ink">
-          {t("tutor.back")}
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <UsageMeter kind="tutor" plan={plan} />
+          <button onClick={reset} className="text-sm text-ink-muted hover:text-ink">
+            {t("tutor.back")}
+          </button>
+        </div>
       </header>
 
       <div
@@ -259,6 +274,8 @@ export default function TutorChat() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {limit && <UpgradePrompt kind={limit.kind} limit={limit.limit} />}
 
         {error && (
           <div className="rounded-xl border border-critical/30 bg-critical/10 px-4 py-3 text-sm text-critical">

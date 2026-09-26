@@ -2,35 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeMasteryStats } from "@/lib/leitner";
 import { requireUserId } from "@/lib/auth";
-
-/**
- * Counts consecutive days ending today (or yesterday) that have at least one
- * attempt. Yesterday still counts so a streak isn't "lost" before you've
- * practised today.
- */
-function computeStreak(dates: Date[]): number {
-  if (dates.length === 0) return 0;
-
-  const days = new Set(dates.map((d) => new Date(d).toISOString().slice(0, 10)));
-
-  const today = new Date();
-  const todayKey = today.toISOString().slice(0, 10);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayKey = yesterday.toISOString().slice(0, 10);
-
-  if (!days.has(todayKey) && !days.has(yesterdayKey)) return 0;
-
-  let streak = 0;
-  const cursor = new Date(today);
-  if (!days.has(todayKey)) cursor.setDate(cursor.getDate() - 1);
-
-  while (days.has(cursor.toISOString().slice(0, 10))) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
-}
+import { resolveTimeZone } from "@/lib/plans";
+import { computeStreak } from "@/lib/streak";
 
 /**
  * GET /api/dashboard
@@ -41,7 +14,7 @@ export async function GET() {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const [progress, recentMistakes, totalAttempts, correctAttempts, totalCards, attemptDates] =
+  const [progress, recentMistakes, totalAttempts, correctAttempts, totalCards, attemptDates, user] =
     await Promise.all([
       prisma.cardProgress.findMany({
         where: { userId },
@@ -62,6 +35,7 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         take: 500,
       }),
+      prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true } }),
     ]);
 
   const overall = computeMasteryStats(progress);
@@ -90,7 +64,12 @@ export async function GET() {
     overall,
     dueToday,
     totalCards,
-    streak: computeStreak(attemptDates.map((a) => a.createdAt)),
+    // Counted in the learner's own calendar, like the daily limits.
+    streak: computeStreak(
+      attemptDates.map((a) => a.createdAt),
+      now,
+      resolveTimeZone(user?.timeZone)
+    ),
     topicMastery,
     recentMistakes: recentMistakes.map((m) => ({
       cardPrompt: m.card.prompt,

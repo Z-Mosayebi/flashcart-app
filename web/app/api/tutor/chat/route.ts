@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
+import { reserveAiCall } from "@/lib/entitlements";
 import { tutorChat } from "@/lib/ai";
 
 /** How many prior turns to replay to the model. Keeps prompt size bounded on
@@ -58,6 +59,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "session not found" }, { status: 404 });
   }
 
+  // Reserved after the last early return and before anything is written, so
+  // only a real tutor reply is counted. The opening turn counts like any other.
+  const reservation = await reserveAiCall(userId, "tutor");
+  if (!reservation.ok) return reservation.response;
+
   if (!session) {
     session = await prisma.tutorSession.create({ data: { userId, topicId } });
   }
@@ -86,6 +92,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("tutorChat failed", err);
+    await reservation.release();
     return NextResponse.json({ error: "ai_unavailable" }, { status: 503 });
   }
 

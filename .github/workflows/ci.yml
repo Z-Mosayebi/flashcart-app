@@ -64,7 +64,7 @@ jobs:
           # Build-time dummy values so `next build` and `prisma generate` succeed
           # even without real infrastructure connected — CI never talks to a real
           # DB or the AI service, it just proves the code compiles and typechecks.
-          DATABASE_URL: "postgresql://user:password@localhost:5432/flashcart"
+          DATABASE_URL: "postgresql://user:password@localhost:5432/flashcard"
           AI_SERVICE_URL: "http://localhost:8000"
           NEXTAUTH_URL: "http://localhost:3000"
           NEXTAUTH_SECRET: "ci-placeholder-secret-not-used-anywhere"

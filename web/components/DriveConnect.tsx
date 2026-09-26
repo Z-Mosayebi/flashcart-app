@@ -5,6 +5,8 @@ import { signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
+import UpgradePrompt from "@/components/UpgradePrompt";
+import { readLimitHit, type LimitHit } from "@/components/usePlan";
 
 interface DriveDocument {
   id: string;
@@ -18,6 +20,7 @@ interface DriveDocument {
   lastError: string | null;
   topicCount: number;
   readOnly: boolean;
+  provider: "GOOGLE_DRIVE" | "NOTION" | "UPLOAD";
 }
 
 interface DriveState {
@@ -56,7 +59,7 @@ function iconFor(mimeType: string | null): string {
   return "📄";
 }
 
-export default function DriveConnect() {
+export default function DriveConnect({ refreshKey = 0 }: { refreshKey?: number }) {
   const { t, locale } = usePreferences();
 
   const [state, setState] = useState<DriveState | null>(null);
@@ -67,6 +70,7 @@ export default function DriveConnect() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [limit, setLimit] = useState<LimitHit | null>(null);
 
   const formatDate = useCallback(
     (iso: string | null) =>
@@ -89,9 +93,10 @@ export default function DriveConnect() {
     }
   }, [t]);
 
+  // refreshKey changes when a document arrives some other way (an upload).
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   // An import writes progress to the database as it goes, so polling shows a
   // real section count. Polling stops as soon as nothing is in flight, rather
@@ -151,11 +156,38 @@ export default function DriveConnect() {
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  /** Continues an unfinished upload (it has no Drive file to re-fetch). */
+  const continueDocument = async (documentId: string) => {
+    setImporting(true);
+    setError(null);
+    setLimit(null);
+    try {
+      for (let round = 0; round < MAX_IMPORT_ROUNDS; round++) {
+        const res = await fetch(`/api/me/documents/${documentId}/continue`, { method: "POST" });
+        const hit = await readLimitHit(res);
+        if (hit) {
+          setLimit(hit);
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.detail);
+        void load();
+        if (data.result?.status !== "partial") return;
+      }
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : t("drive.error.generic"));
+    } finally {
+      setImporting(false);
+      void load();
+    }
+  };
+
   const startImport = async (fileIds: string[]) => {
     if (fileIds.length === 0) return;
 
     setImporting(true);
     setError(null);
+    setLimit(null);
     setNotice(t("drive.import.started"));
     setPickerOpen(false);
 
@@ -175,6 +207,12 @@ export default function DriveConnect() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileIds: pending }),
         });
+        const hit = await readLimitHit(res);
+        if (hit) {
+          setLimit(hit);
+          setNotice(null);
+          return;
+        }
         const data = await res.json();
 
         if (res.status === 403) {
@@ -274,6 +312,8 @@ export default function DriveConnect() {
         </button>
       )}
 
+      {limit && <UpgradePrompt kind={limit.kind} limit={limit.limit} />}
+
       {error && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-200">
           {error}
@@ -305,14 +345,28 @@ export default function DriveConnect() {
                     <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                       <DocumentStatus doc={doc} t={t} formatDate={formatDate} />
                     </p>
-                    {doc.readOnly && (
+                    {doc.provider === "NOTION" && (
                       <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                         {t("drive.documents.legacy")}
+                      </p>
+                    )}
+                    {doc.provider === "UPLOAD" && (
+                      <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                        {t("drive.documents.uploaded")}
                       </p>
                     )}
                   </div>
 
                   <div className="flex shrink-0 gap-2">
+                    {doc.provider === "UPLOAD" && (doc.status === "PENDING" || doc.status === "IMPORTING") && (
+                      <button
+                        onClick={() => void continueDocument(doc.id)}
+                        disabled={importing}
+                        className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-40 dark:text-slate-400 dark:hover:text-slate-100"
+                      >
+                        {t("drive.documents.continue")}
+                      </button>
+                    )}
                     {!doc.readOnly && state.connected && (
                       <button
                         onClick={() => void startImport([doc.externalId])}

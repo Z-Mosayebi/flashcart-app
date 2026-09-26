@@ -1,4 +1,4 @@
-// Flashcart — German Learning Flashcards with Leitner + AI Tutoring
+// Flashcard — German Learning Flashcards with Leitner + AI Tutoring
 // Prisma schema for Postgres (Neon/Supabase on Vercel)
 
 generator client {
@@ -27,6 +27,14 @@ model User {
   // Set once the starter deck has been copied in, so provisioning runs once.
   deckProvisionedAt DateTime?
 
+  // Premium lasts until this instant; null or past means the free plan.
+  // Nothing needs to run at expiry — the date passing is the expiry.
+  premiumUntil DateTime?
+
+  // IANA zone reported by the browser; daily limits and the streak reset at
+  // its midnight. Null until the browser has reported one.
+  timeZone String?
+
   accounts         Account[]
   sessions         Session[]
   resetTokens      PasswordResetToken[]
@@ -37,6 +45,8 @@ model User {
   cards            Card[]
   sourceDocuments  SourceDocument[]
   driveConnection  DriveConnection?
+  premiumRequests  PremiumRequest[]
+  aiUsage          AiUsage[]
 }
 
 // ---------- NextAuth ----------
@@ -105,9 +115,12 @@ model PasswordResetToken {
 
 // Where a document came from. NOTION is retained only so documents imported
 // before the move to Drive keep their provenance; nothing creates new ones.
+// UPLOAD is a file sent from the learner's computer; its externalId is the
+// SHA-256 of the bytes, so the same file always maps to the same document.
 enum SourceProvider {
   GOOGLE_DRIVE
   NOTION
+  UPLOAD
 }
 
 // How far along an import is. Importing a long document takes minutes and
@@ -145,6 +158,11 @@ model SourceDocument {
   sectionsDone  Int     @default(0)
   sectionsTotal Int     @default(0)
   lastError     String? @db.Text
+
+  // Set when the learner removes the document. The row stays so it keeps
+  // counting toward the plan's document allowance (removing must not make room
+  // while its cards remain), and re-importing the same file revives it.
+  removedAt DateTime?
 
   // Null only for the shared starter template (see Topic.isTemplate).
   ownerId String?
@@ -324,4 +342,81 @@ model TutorMessage {
   session TutorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
+}
+
+// ---------- Premium trial requests ----------
+
+enum PremiumRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LearningGoal {
+  EXAM
+  WORK
+  IMMIGRATION
+  STUDY
+  PERSONAL
+  OTHER
+}
+
+enum GermanLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+  UNKNOWN
+}
+
+// What the learner says they would pay per month, in EUR. Demand research
+// for pricing, not a commitment.
+enum PayWillingness {
+  NOTHING
+  UNDER_5
+  FROM_5_TO_10
+  OVER_10
+}
+
+model PremiumRequest {
+  id           String               @id @default(cuid())
+  userId       String
+  goal         LearningGoal
+  level        GermanLevel
+  willingToPay PayWillingness
+  // Telegram handle or phone, optional. Personal data: shown only to admins.
+  contact      String?
+  message      String?              @db.Text
+  status       PremiumRequestStatus @default(PENDING)
+  grantedDays  Int?
+  createdAt    DateTime             @default(now())
+  decidedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+// ---------- Daily AI allowance ----------
+
+enum UsageKind {
+  GRADED
+  TUTOR
+}
+
+// One row per model call counted against a daily allowance. Written *before*
+// the call and deleted if it fails, so parallel requests can't slip past the
+// limit (see web/lib/usage.ts).
+model AiUsage {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      UsageKind
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
 }

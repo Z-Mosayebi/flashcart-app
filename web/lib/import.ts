@@ -15,6 +15,7 @@
 import { prisma } from "@/lib/prisma";
 import { generateCards, type GeneratedCard } from "@/lib/ai";
 import {
+  MIME,
   fetchDocumentText,
   fetchSpreadsheetRows,
   getFileMetadata,
@@ -22,12 +23,10 @@ import {
   isSupported,
   unsupportedReason,
 } from "@/lib/google-drive";
-import {
-  buildCardsFromRows,
-  detectColumns,
-  rowsToMarkdown,
-} from "@/lib/spreadsheet-cards";
+import { buildCardsFromRows, detectColumns, rowsToMarkdown } from "@/lib/spreadsheet-cards";
 import { splitIntoSections, type Section } from "@/lib/sectioner";
+import type { ImportContent } from "@/lib/file-parsers";
+import { DocumentLimitError, getEntitlement } from "@/lib/entitlements";
 
 /**
  * How long one request may spend generating before it hands back. The route's
@@ -40,12 +39,15 @@ export const IMPORT_TIME_BUDGET_MS = 180_000;
 /** The AI service rejects notes longer than this. */
 const MAX_NOTES_CHARS = 60_000;
 
+/** Documents imported as rows; everything else is prose split into sections. */
+const ROWS_MIMES: string[] = [MIME.googleSheet, MIME.xlsx, "text/csv"];
+
 export interface ImportOutcome {
   documentId: string;
-  /** The Drive file id, so a client can ask to continue a partial import. */
+  /** The document's external id (Drive file id, or upload hash). */
   fileId: string;
   title: string;
-  /** "partial": the time budget ran out; calling again continues where it stopped. */
+  /** "partial": the time budget ran out; continuing picks up where it stopped. */
   status: "unchanged" | "imported" | "partial" | "failed";
   cardsCreated: number;
   sectionsDone: number;
@@ -53,58 +55,103 @@ export interface ImportOutcome {
   error?: string;
 }
 
+/** Identifies a document independently of where it came from. */
+export interface SourceRef {
+  provider: "GOOGLE_DRIVE" | "UPLOAD";
+  externalId: string;
+  /** Changes only when content does. Uploads use the content hash. */
+  revisionId: string | null;
+  title: string;
+  mimeType: string;
+  modifiedTime?: string | null;
+}
+
 interface SectionProgress {
   cardsCreated: number;
   sectionsDone: number;
   sectionsTotal: number;
-  /** True when the deadline stopped the import before the last section. */
   remaining?: boolean;
 }
 
-/**
- * Imports one Drive document into a user's deck.
- *
- * Safe to call again on the same document: unchanged documents are skipped via
- * Drive's revision id, cards that already exist are not duplicated, and an
- * import that was interrupted (time budget, crash, platform timeout) resumes at
- * the section it reached rather than starting over.
- *
- * `deadline` (epoch ms) bounds how long this call keeps generating; past it the
- * document is left PENDING and the outcome is "partial".
- */
+type StoredDocument = NonNullable<Awaited<ReturnType<typeof prisma.sourceDocument.findUnique>>>;
+
+/** An interrupted prose import of the same revision can pick up from its stored text. */
+function resumePoint(doc: StoredDocument | null, revisionId: string | null) {
+  if (
+    doc &&
+    (doc.status === "IMPORTING" || doc.status === "PENDING") &&
+    doc.revisionId != null &&
+    doc.revisionId === revisionId &&
+    !ROWS_MIMES.includes(doc.mimeType ?? "") &&
+    doc.rawMarkdown.length > 0 &&
+    doc.sectionsTotal > 0 &&
+    doc.sectionsDone < doc.sectionsTotal
+  ) {
+    return { text: doc.rawMarkdown, from: doc.sectionsDone };
+  }
+  return undefined;
+}
+
+/** Imports one Drive document. See importFromSource for the guarantees. */
 export async function importDocument(
   userId: string,
   fileId: string,
   deadline: number = Date.now() + IMPORT_TIME_BUDGET_MS
 ): Promise<ImportOutcome> {
   const meta = await getFileMetadata(userId, fileId);
-
   if (!isSupported(meta.mimeType)) {
     throw new Error(unsupportedReason(meta.mimeType));
   }
 
-  const existing = await prisma.sourceDocument.findUnique({
-    where: {
-      ownerId_provider_externalId: {
-        ownerId: userId,
-        provider: "GOOGLE_DRIVE",
-        externalId: fileId,
-      },
+  return importFromSource(
+    userId,
+    {
+      provider: "GOOGLE_DRIVE",
+      externalId: fileId,
+      revisionId: meta.revisionId ?? null,
+      title: meta.name,
+      mimeType: meta.mimeType,
+      modifiedTime: meta.modifiedTime,
     },
-  });
+    async () =>
+      isSpreadsheet(meta.mimeType)
+        ? { kind: "rows", rows: await fetchSpreadsheetRows(userId, fileId, meta.mimeType) }
+        : { kind: "text", text: await fetchDocumentText(userId, fileId, meta.mimeType) },
+    deadline
+  );
+}
 
-  // Drive's revision id changes only when content does, unlike modifiedTime,
-  // which moves when a file is merely opened or re-shared. Using it is what
-  // keeps a daily re-import from regenerating an untouched deck.
+/**
+ * Imports one document from any source into a user's deck.
+ *
+ * Safe to call again: unchanged documents are skipped by revision, cards are
+ * de-duplicated by prompt, and an interrupted import resumes at the section it
+ * reached. A *new* document beyond the plan's allowance throws
+ * DocumentLimitError (its row is removed again); an existing one — including
+ * one the learner removed — is always allowed, since it already counts.
+ */
+export async function importFromSource(
+  userId: string,
+  ref: SourceRef,
+  load: () => Promise<ImportContent>,
+  deadline: number = Date.now() + IMPORT_TIME_BUDGET_MS
+): Promise<ImportOutcome> {
+  const key = {
+    ownerId_provider_externalId: { ownerId: userId, provider: ref.provider, externalId: ref.externalId },
+  };
+  const existing = await prisma.sourceDocument.findUnique({ where: key });
+
+  // A removed document is never "unchanged": importing it again brings it back.
   const unchanged =
     existing?.status === "COMPLETE" &&
+    existing.removedAt == null &&
     existing.revisionId != null &&
-    existing.revisionId === meta.revisionId;
+    existing.revisionId === ref.revisionId;
 
   if (unchanged) {
     return {
       documentId: existing.id,
-      fileId,
+      fileId: ref.externalId,
       title: existing.title,
       status: "unchanged",
       cardsCreated: 0,
@@ -113,58 +160,52 @@ export async function importDocument(
     };
   }
 
-  // An interrupted import of the same revision picks up where it stopped. The
-  // stored text is reused so the sections line up with the saved position.
-  const resume =
-    existing != null &&
-    (existing.status === "IMPORTING" || existing.status === "PENDING") &&
-    existing.revisionId != null &&
-    existing.revisionId === meta.revisionId &&
-    !isSpreadsheet(meta.mimeType) &&
-    existing.rawMarkdown.length > 0 &&
-    existing.sectionsTotal > 0 &&
-    existing.sectionsDone < existing.sectionsTotal
-      ? { text: existing.rawMarkdown, from: existing.sectionsDone }
-      : undefined;
+  const resume = resumePoint(existing, ref.revisionId);
 
   const doc = await prisma.sourceDocument.upsert({
-    where: {
-      ownerId_provider_externalId: {
-        ownerId: userId,
-        provider: "GOOGLE_DRIVE",
-        externalId: fileId,
-      },
-    },
+    where: key,
     create: {
-      provider: "GOOGLE_DRIVE",
-      externalId: fileId,
-      title: meta.name,
+      provider: ref.provider,
+      externalId: ref.externalId,
+      title: ref.title,
       rawMarkdown: "",
-      mimeType: meta.mimeType,
+      mimeType: ref.mimeType,
       ownerId: userId,
       status: "IMPORTING",
       // Recorded up front so an interrupted import can tell whether the
       // document changed before resuming. It only marks the document up to
       // date together with status COMPLETE, so a partial import is never skipped.
-      revisionId: meta.revisionId,
+      revisionId: ref.revisionId,
     },
     update: resume
-      ? { status: "IMPORTING", lastError: null }
+      ? { status: "IMPORTING", lastError: null, removedAt: null }
       : {
-          title: meta.name,
-          mimeType: meta.mimeType,
+          title: ref.title,
+          mimeType: ref.mimeType,
           status: "IMPORTING",
-          revisionId: meta.revisionId,
+          revisionId: ref.revisionId,
           sectionsDone: 0,
           sectionsTotal: 0,
           lastError: null,
+          removedAt: null,
         },
   });
 
+  // A new document is checked against the allowance *after* its row exists
+  // (insert-then-count, as in lib/usage.ts): two imports started at once
+  // can't both see room for one more. The loser's row is removed again.
+  if (!existing) {
+    const entitlement = await getEntitlement(userId);
+    if (!entitlement.admin && entitlement.usage.documents > entitlement.limits.documents) {
+      await prisma.sourceDocument.deleteMany({ where: { id: doc.id, status: "IMPORTING" } });
+      throw new DocumentLimitError(entitlement);
+    }
+  }
+
   try {
-    const outcome = isSpreadsheet(meta.mimeType)
-      ? await importSpreadsheet(userId, doc.id, fileId, meta.mimeType, meta.name)
-      : await importProse(userId, doc.id, fileId, meta.mimeType, meta.name, { deadline, resume });
+    const outcome = resume
+      ? await processText(userId, doc.id, resume.text, ref.title, deadline, resume.from)
+      : await processContent(userId, doc.id, await load(), ref.title, deadline);
 
     const progress = {
       cardsCreated: outcome.cardsCreated,
@@ -174,25 +215,22 @@ export async function importDocument(
 
     if (outcome.remaining) {
       // Out of time, not out of work: leave it resumable for the next call.
-      await prisma.sourceDocument.update({
-        where: { id: doc.id },
-        data: { status: "PENDING" },
-      });
-      return { documentId: doc.id, fileId, title: meta.name, status: "partial", ...progress };
+      await prisma.sourceDocument.update({ where: { id: doc.id }, data: { status: "PENDING" } });
+      return { documentId: doc.id, fileId: ref.externalId, title: ref.title, status: "partial", ...progress };
     }
 
     await prisma.sourceDocument.update({
       where: { id: doc.id },
       data: {
         status: "COMPLETE",
-        revisionId: meta.revisionId,
-        lastEditedTime: meta.modifiedTime ? new Date(meta.modifiedTime) : null,
+        revisionId: ref.revisionId,
+        lastEditedTime: ref.modifiedTime ? new Date(ref.modifiedTime) : null,
         lastSyncedAt: new Date(),
         lastError: null,
       },
     });
 
-    return { documentId: doc.id, fileId, title: meta.name, status: "imported", ...progress };
+    return { documentId: doc.id, fileId: ref.externalId, title: ref.title, status: "imported", ...progress };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Import failed";
 
@@ -205,8 +243,8 @@ export async function importDocument(
 
     return {
       documentId: doc.id,
-      fileId,
-      title: meta.name,
+      fileId: ref.externalId,
+      title: ref.title,
       status: "failed",
       cardsCreated: 0,
       sectionsDone: 0,
@@ -216,17 +254,66 @@ export async function importDocument(
   }
 }
 
-/** Prose path: split on the learner's headings, generate per section. */
-async function importProse(
+/**
+ * Continues an unfinished import by document id, whatever its source. Drive
+ * documents are re-fetched through the normal path (which resumes). Uploads
+ * have no source to re-fetch, so only their stored text can be continued.
+ * Returns null when the document isn't the user's.
+ */
+export async function continueImport(
   userId: string,
   documentId: string,
-  fileId: string,
-  mimeType: string,
-  title: string,
-  opts: { deadline: number; resume?: { text: string; from: number } }
-): Promise<SectionProgress> {
-  const text = opts.resume?.text ?? (await fetchDocumentText(userId, fileId, mimeType));
+  deadline: number = Date.now() + IMPORT_TIME_BUDGET_MS
+): Promise<ImportOutcome | null> {
+  const doc = await prisma.sourceDocument.findFirst({ where: { id: documentId, ownerId: userId, removedAt: null } });
+  if (!doc) return null;
 
+  if (doc.provider === "GOOGLE_DRIVE") return importDocument(userId, doc.externalId, deadline);
+
+  const ref: SourceRef = {
+    provider: "UPLOAD",
+    externalId: doc.externalId,
+    revisionId: doc.revisionId,
+    title: doc.title,
+    mimeType: doc.mimeType ?? "text/plain",
+  };
+
+  if (doc.status !== "COMPLETE" && !resumePoint(doc, doc.revisionId)) {
+    throw new Error("This upload can't be continued. Upload the file again.");
+  }
+
+  return importFromSource(
+    userId,
+    ref,
+    async () => {
+      // Unreachable: a COMPLETE upload returns "unchanged", and a resumable
+      // one resumes from stored text without loading.
+      throw new Error("Upload the file again.");
+    },
+    deadline
+  );
+}
+
+async function processContent(
+  userId: string,
+  documentId: string,
+  content: ImportContent,
+  title: string,
+  deadline: number
+): Promise<SectionProgress> {
+  if (content.kind === "rows") return importRows(userId, documentId, content.rows, title);
+  return processText(userId, documentId, content.text, title, deadline, 0);
+}
+
+/** Prose: split on the learner's headings, generate per section, resumable. */
+async function processText(
+  userId: string,
+  documentId: string,
+  text: string,
+  title: string,
+  deadline: number,
+  startFrom: number
+): Promise<SectionProgress> {
   if (!text.trim()) {
     throw new Error("This document is empty.");
   }
@@ -239,9 +326,9 @@ async function importProse(
     );
   }
 
-  const startAt = opts.resume ? Math.min(opts.resume.from, generable.length) : 0;
+  const startAt = Math.min(startFrom, generable.length);
 
-  if (!opts.resume) {
+  if (startAt === 0) {
     await prisma.sourceDocument.update({
       where: { id: documentId },
       data: { rawMarkdown: text, sectionsTotal: generable.length },
@@ -255,7 +342,7 @@ async function importProse(
   for (const section of generable.slice(startAt)) {
     // Always make some progress per call, then stop once time is up so the
     // request ends cleanly rather than being killed by the platform.
-    if (sectionsDone > startAt && Date.now() > opts.deadline) {
+    if (sectionsDone > startAt && Date.now() > deadline) {
       return { cardsCreated, sectionsDone, sectionsTotal: generable.length, remaining: true };
     }
 
@@ -272,15 +359,11 @@ async function importProse(
     }
 
     sectionsDone += 1;
-    await prisma.sourceDocument.update({
-      where: { id: documentId },
-      data: { sectionsDone },
-    });
+    await prisma.sourceDocument.update({ where: { id: documentId }, data: { sectionsDone } });
   }
 
   // Every section of this run failing means something systemic — an outage or
-  // an exhausted quota — not a quirk of the notes, so it is surfaced rather
-  // than reported as a successful import of nothing.
+  // an exhausted quota — not a quirk of the notes.
   if (failures.length > 0 && failures.length === generable.length - startAt) {
     throw new Error("Card generation is unavailable right now. Try again shortly.");
   }
@@ -288,16 +371,13 @@ async function importProse(
   return { cardsCreated, sectionsDone, sectionsTotal: generable.length };
 }
 
-/** Spreadsheet path: map columns directly, falling back to the model. */
-async function importSpreadsheet(
+/** Rows: map columns directly, falling back to the model. */
+async function importRows(
   userId: string,
   documentId: string,
-  fileId: string,
-  mimeType: string,
+  rows: string[][],
   title: string
 ): Promise<SectionProgress> {
-  const rows = await fetchSpreadsheetRows(userId, fileId, mimeType);
-
   if (rows.length === 0) {
     throw new Error("This spreadsheet is empty.");
   }
@@ -312,7 +392,7 @@ async function importSpreadsheet(
 
   // A recognisable vocabulary sheet is already a deck; mapping it directly
   // costs nothing and preserves exactly what the learner wrote.
-  const cards = detection.mappable
+  const cards: GeneratedCard[] = detection.mappable
     ? buildCardsFromRows(rows, detection, { defaultTopic: title })
     : (
         await generateCards({
@@ -325,10 +405,7 @@ async function importSpreadsheet(
 
   const cardsCreated = await persistCards(userId, documentId, cards);
 
-  await prisma.sourceDocument.update({
-    where: { id: documentId },
-    data: { sectionsDone: 1 },
-  });
+  await prisma.sourceDocument.update({ where: { id: documentId }, data: { sectionsDone: 1 } });
 
   return { cardsCreated, sectionsDone: 1, sectionsTotal: 1 };
 }

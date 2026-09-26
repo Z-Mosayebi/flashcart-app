@@ -1,8 +1,8 @@
-# Architecture Decision Record — Flashcart
+# Architecture Decision Record — Flashcard
 
 **Status:** Living document · **Last updated:** 2026-07-28
 
-This record captures the significant architectural decisions behind Flashcart: what
+This record captures the significant architectural decisions behind Flashcard: what
 was decided, the situation that forced the decision, what else was considered, and
 what the choice costs us. It is written for someone joining the project who needs to
 know *why* the system looks the way it does before changing it.
@@ -32,6 +32,7 @@ Each decision uses the same shape: **Context → Decision → Alternatives → C
 | [ADR-012](#adr-012-source-notes-from-google-drive-and-fold-the-connect-step-into-sign-in) | Source notes from Google Drive, folding connect into sign-in | Accepted |
 | [ADR-013](#adr-013-split-documents-on-the-learners-own-headings-before-generating) | Split documents on the learner’s own headings | Accepted |
 | [ADR-014](#adr-014-map-structured-spreadsheets-to-cards-without-a-model) | Map structured spreadsheets to cards without a model | Accepted |
+| [ADR-015](#adr-015-free-demo-limits-by-reservation-premium-as-an-end-date) | Free demo limits by reservation; premium as an end date | Accepted |
 
 ---
 
@@ -41,7 +42,7 @@ Each decision uses the same shape: **Context → Decision → Alternatives → C
 
 ### Context
 
-Flashcart has two very different kinds of work. One is a conventional web product:
+Flashcard has two very different kinds of work. One is a conventional web product:
 pages, sessions, API routes, relational data. The other is model-facing work: prompt
 design, JSON-mode coaxing, grading heuristics, multi-turn tutoring state. These evolve
 on different rhythms. Prompt work changes daily during tuning and needs fast, isolated
@@ -382,7 +383,7 @@ independent records instead of colliding.
 
 ### Context
 
-Every meaningful route in Flashcart is user-scoped: due cards, progress, attempts, tutor
+Every meaningful route in Flashcard is user-scoped: due cards, progress, attempts, tutor
 sessions, the Drive connection. The tempting shape — accept a `userId` parameter — is
 also the vulnerability: anyone could read or overwrite another learner's data by editing
 one query parameter.
@@ -836,6 +837,61 @@ sheet is more likely to be notes than a vocabulary list.
   to generation bounds the damage to "slower than it could have been".
 - **Cost:** stem matching for cloze cards is a heuristic over German morphology, not a
   real analyser, and will occasionally blank the wrong word.
+
+---
+
+## ADR-015: Free demo limits by reservation; premium as an end date
+
+**Status:** Accepted
+
+### Context
+
+The app runs on a shared free model quota (~1,500 Gemini requests a day for everyone).
+Before charging for anything, the owner wants to learn whether people want more than a
+free account gives. That needs a small free allowance, a way to ask for more, and
+numbers on who asks and what they would pay.
+
+### Decision
+
+- **Limits** (in `web/lib/plans.ts`): free accounts get 1 imported document, 30 graded
+  answers and 10 tutor replies a day; premium gets 10 / 200 / 50; admins are unlimited.
+- **Each model call reserves a unit first** — an `AiUsage` row is inserted, *then*
+  today's rows are counted, and the call proceeds only if the count is within the
+  limit; otherwise (or if the call fails, or its result is discarded) the row is
+  deleted. Insert-then-count admits at most `limit` callers however requests
+  interleave, with no lock (`web/lib/usage.ts`).
+- **Documents count by row, and removing one keeps the row** (`removedAt`), so removing
+  a document can't make room for another while its cards stay. A failed import that
+  produced nothing doesn't count. New documents use the same insert-then-count check.
+- **"A day" is the learner's own day**: midnight in `User.timeZone`, reported by the
+  browser, falling back to Europe/Berlin. The practice streak uses the same calendar.
+- **Premium is one column, `User.premiumUntil`.** Expiry is the date passing; no
+  scheduled job. Trials are granted by hand from `/admin` after a request form.
+- **Admin is an env allow-list** (`ADMIN_EMAILS`), re-checked against the database on
+  every admin page and API call. Non-admins opening `/admin` are redirected to their
+  dashboard without an error.
+
+### Alternatives considered
+
+- **Counting rows the app already writes** (`Attempt`, `TutorMessage`). No extra write.
+  Rejected after review: the row is written only after a model call that takes seconds,
+  so parallel requests all see room and the limit has no bound.
+- **A per-user advisory lock around check and call.** Rejected: session locks don't
+  survive a transaction-mode connection pooler, and a transaction held open for a
+  45-second model call ties up scarce free-tier connections.
+- **A subscription/billing provider now.** Rejected until there is evidence of demand;
+  premium is free while being tested.
+- **A fixed Berlin midnight for everyone.** Simpler. Rejected: the audience is spread
+  across time zones, and a reset at mid-afternoon local time reads as a bug.
+
+### Consequences
+
+- **Cost:** one extra insert (and sometimes a delete) per model call.
+- **Cost:** on the free plan a removed document can't be swapped for another; the
+  learner has to ask for premium.
+- **Cost:** a learner who changes their device's zone can shift one day's reset by a
+  few hours.
+- The admin dashboard's "hit a daily limit" count is the main demand signal.
 
 ---
 

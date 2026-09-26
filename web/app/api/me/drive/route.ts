@@ -17,7 +17,7 @@ export async function GET() {
   const [conn, documents] = await Promise.all([
     prisma.driveConnection.findUnique({ where: { userId } }),
     prisma.sourceDocument.findMany({
-      where: { ownerId: userId },
+      where: { ownerId: userId, removedAt: null },
       orderBy: { lastSyncedAt: "desc" },
       select: {
         id: true,
@@ -44,9 +44,9 @@ export async function GET() {
       ...doc,
       topicCount: doc._count.topics,
       _count: undefined,
-      // Documents imported before the move to Drive can be reviewed but not
-      // re-imported, since the connection that fetched them is gone.
-      readOnly: doc.provider === "NOTION",
+      // Only Drive documents can be re-fetched. Uploads are continued by id
+      // instead, and pre-Drive Notion documents can only be reviewed.
+      readOnly: doc.provider !== "GOOGLE_DRIVE",
     })),
   });
 }

@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import type { Session } from "next-auth";
 import { ReactNode } from "react";
 import { PreferencesProvider } from "@/components/PreferencesProvider";
+import TimeZoneSync from "@/components/TimeZoneSync";
 import { Locale, isLocale } from "@/lib/i18n";
 
 export default function Providers({
@@ -21,6 +22,7 @@ export default function Providers({
 
   return (
     <SessionProvider session={session}>
+      <TimeZoneSync />
       <PreferencesProvider initialLocale={initialLocale}>{children}</PreferencesProvider>
     </SessionProvider>
   );

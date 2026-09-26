@@ -164,3 +164,27 @@ Didn't ask for this? Ignore this email — your password stays as it is.`;
 
   return { subject, html, text };
 }
+
+/** Sent when the admin activates a premium trial. */
+export function premiumActivatedEmail(until: Date, appUrl: string) {
+  const date = until.toLocaleDateString("en-GB", { dateStyle: "long", timeZone: "Europe/Berlin" });
+  const subject = "Your Flashcard Premium is active";
+
+  const html = layout(
+    "Premium is on",
+    `<p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#57534e;">
+       Your premium trial is active until <strong>${date}</strong>: more documents,
+       more graded answers and more tutor practice every day.
+     </p>
+     <a href="${appUrl}"
+        style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 24px;border-radius:12px;">
+       Open Flashcard
+     </a>`
+  );
+
+  const text = `Your Flashcard Premium is active until ${date}.
+
+Open Flashcard: ${appUrl}`;
+
+  return { subject, html, text };
+}

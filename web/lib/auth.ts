@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { provisionStarterDeck } from "@/lib/provisioning";
 import { DRIVE_SCOPE } from "@/lib/google-drive";
 import { encryptSecret } from "@/lib/crypto";
+import { isAdminEmail } from "@/lib/plans";
 
 const googleId = process.env.GOOGLE_CLIENT_ID;
 const googleSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -113,12 +114,15 @@ export const authOptions: NextAuthOptions = {
       if (token.uid) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.uid as string },
-          select: { locale: true, name: true, image: true },
+          select: { locale: true, name: true, image: true, email: true },
         });
         if (dbUser) {
           token.locale = dbUser.locale;
           token.name = dbUser.name;
           token.picture = dbUser.image;
+          // Only drives whether the nav shows the admin link; admin pages and
+          // APIs re-check against the database on every request.
+          token.isAdmin = isAdminEmail(dbUser.email);
         }
       }
       return token;
@@ -129,6 +133,7 @@ export const authOptions: NextAuthOptions = {
         session.user.locale = (token.locale as string) ?? "en";
         session.user.name = token.name ?? null;
         session.user.image = (token.picture as string | null) ?? null;
+        session.user.isAdmin = Boolean(token.isAdmin);
       }
       return session;
     },

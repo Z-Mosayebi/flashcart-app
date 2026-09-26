@@ -6,6 +6,9 @@ import Link from "next/link";
 import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
 import SpeakButton from "@/components/SpeakButton";
+import UpgradePrompt from "@/components/UpgradePrompt";
+import UsageMeter from "@/components/UsageMeter";
+import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 
 interface Card {
   id: string;
@@ -60,6 +63,8 @@ export default function ReviewSession() {
   const [answer, setAnswer] = useState("");
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [reveal, setReveal] = useState<Reveal | null>(null);
+  const [limit, setLimit] = useState<LimitHit | null>(null);
+  const { plan, reload } = usePlan();
   const [submitting, setSubmitting] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,10 +112,16 @@ export default function ReviewSession() {
         next();
         return;
       }
+      const hit = await readLimitHit(res);
+      if (hit) {
+        setLimit(hit);
+        return;
+      }
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setEvaluation(data.evaluation);
       setReveal(data.reveal ?? null);
+      reload();
       setReviewed((n) => n + 1);
       if (data.evaluation?.result === "CORRECT") setCorrect((n) => n + 1);
     } catch {
@@ -125,6 +136,7 @@ export default function ReviewSession() {
     setAnswer("");
     setEvaluation(null);
     setReveal(null);
+    setLimit(null);
     setShowHint(false);
     setError(null);
     // Return focus to the input so keyboard users keep their flow.
@@ -207,7 +219,8 @@ export default function ReviewSession() {
         <span className="truncate rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">
           {current.card.topic.name}
         </span>
-        <span className="shrink-0 text-ink-faint">
+        <span className="flex shrink-0 items-center gap-3 text-ink-faint">
+          <UsageMeter kind="graded" plan={plan} />
           {t("review.remaining", { count: queue.length })}
         </span>
       </div>
@@ -367,6 +380,8 @@ export default function ReviewSession() {
                 </motion.button>
               </motion.div>
             )}
+
+            {limit && <UpgradePrompt kind={limit.kind} limit={limit.limit} />}
 
             {error && (
               <p className="rounded-xl border border-critical/30 bg-critical/10 px-4 py-3 text-sm text-critical">

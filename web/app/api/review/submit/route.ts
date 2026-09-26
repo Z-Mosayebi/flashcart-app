@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { evaluateAnswer } from "@/lib/ai";
 import { scheduleNextReview } from "@/lib/leitner";
 import { requireUserId } from "@/lib/auth";
+import { reserveAiCall } from "@/lib/entitlements";
 
 /** Matches the AI service's limit; longer input is almost certainly not an answer. */
 const MAX_ANSWER_CHARS = 2_000;
@@ -48,6 +49,11 @@ export async function POST(req: NextRequest) {
   });
   if (!card) return NextResponse.json({ error: "card not found" }, { status: 404 });
 
+  // Reserved before the model call: the cap exists to protect the shared
+  // free model quota, so a request over it must not reach the model at all.
+  const reservation = await reserveAiCall(userId, "graded");
+  if (!reservation.ok) return reservation.response;
+
   // Read the progress row before grading so a concurrent submit of the same
   // card (double click, second tab) can be detected when writing below.
   const existing = await prisma.cardProgress.findUnique({ where: { userId_cardId: { userId, cardId } } });
@@ -64,6 +70,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // The AI service being down shouldn't look like a client bug.
     console.error("evaluateAnswer failed", err);
+    await reservation.release();
     return NextResponse.json({ error: "ai_unavailable" }, { status: 503 });
   }
 
@@ -133,6 +140,8 @@ export async function POST(req: NextRequest) {
       err instanceof ConcurrentReviewError ||
       (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002");
     if (duplicate) {
+      // The grade was discarded, so the learner isn't charged for it.
+      await reservation.release();
       return NextResponse.json({ error: "already_reviewed" }, { status: 409 });
     }
     throw err;
