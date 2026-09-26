@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
   let cards = dueProgress.map((p) => ({
     progressId: p.id as string | null,
     box: p.box,
+    // Shown as a 🔥 streak on the card.
+    correctStreak: p.correctStreak,
     dueAt: p.dueAt,
     card: p.card,
   }));
@@ -67,6 +69,7 @@ export async function GET(req: NextRequest) {
       unseen.map((card) => ({
         progressId: null,
         box: 1,
+        correctStreak: 0,
         dueAt: new Date(),
         card,
       }))

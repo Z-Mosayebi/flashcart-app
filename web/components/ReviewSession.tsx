@@ -12,6 +12,9 @@ import UpgradePrompt from "@/components/UpgradePrompt";
 import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 import { afterAnswer, verdictLabelKey } from "@/lib/review-flow";
+import HoloCard from "@/components/HoloCard";
+import { cardPosition, deckLayers, rarityForBox } from "@/lib/card-look";
+import { playCardSound, type CardSound } from "@/lib/card-sounds";
 
 interface Card {
   id: string;
@@ -24,6 +27,7 @@ interface Card {
 interface DueCard {
   progressId: string | null;
   box: number;
+  correctStreak: number;
   card: Card;
 }
 
@@ -57,7 +61,13 @@ const RESULT_STYLES = {
 } as const;
 
 export default function ReviewSession() {
-  const { t, autoPlayAudio } = usePreferences();
+  const { t, autoPlayAudio, cardSounds } = usePreferences();
+  const play = useCallback(
+    (sound: CardSound) => {
+      if (cardSounds) playCardSound(sound);
+    },
+    [cardSounds]
+  );
 
   const [queue, setQueue] = useState<DueCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +87,8 @@ export default function ReviewSession() {
   // Session tally for the completion screen.
   const [reviewed, setReviewed] = useState(0);
   const [correct, setCorrect] = useState(0);
+  // Size of the deck when the session was dealt, for "#n / total".
+  const [sessionTotal, setSessionTotal] = useState(0);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -88,6 +100,7 @@ export default function ReviewSession() {
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setQueue(data.cards ?? []);
+      setSessionTotal((data.cards ?? []).length);
     } catch {
       setError(t("common.error"));
     } finally {
@@ -100,6 +113,21 @@ export default function ReviewSession() {
   }, [loadQueue]);
 
   const current = queue[0];
+
+  // A new card comes off the deck.
+  const currentId = current?.card.id;
+  useEffect(() => {
+    if (currentId) play("deal");
+    // Only the card changing should deal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
+  // The deck ran out after at least one card: a short "done" flourish.
+  const finishedSession = !loading && !current && reviewed > 0;
+  useEffect(() => {
+    if (finishedSession) play("complete");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishedSession]);
 
   async function submit() {
     if (!current || !answer.trim() || submitting) return;
@@ -128,6 +156,7 @@ export default function ReviewSession() {
       setEvaluation(data.evaluation);
       setReveal(data.reveal ?? null);
       setStage(afterAnswer(data.evaluation.result, isRetry, data.evaluation.gaveUp));
+      play(data.evaluation.result === "CORRECT" ? "correct" : "wrong");
       reload();
       // The session tally, like the Leitner box, reflects the first answer.
       if (!isRetry) {
@@ -279,211 +308,211 @@ export default function ReviewSession() {
   // ---------- Active card ----------
 
   const style = evaluation ? RESULT_STYLES[evaluation.result] : null;
+  const side = stage === "answer" || stage === "retry" ? "front" : "back";
+  const layers = deckLayers(queue.length);
+
+  const front = (
+    <div className="space-y-4 p-5 pt-6 sm:p-7 sm:pt-7">
+      <div className="flex items-start gap-3">
+        <p lang="de" className="text-german min-w-0 flex-1 text-lg leading-relaxed sm:text-xl">
+          <RichText text={current.card.prompt} />
+        </p>
+        <SpeakButton
+          text={current.card.prompt}
+          autoPlay={autoPlayAudio && stage === "answer"}
+          label={t("review.listen")}
+        />
+      </div>
+
+      {/* Hint */}
+      {current.card.hints.length > 0 && stage === "answer" && (
+        <div>
+          <button
+            onClick={() => setShowHint((s) => !s)}
+            className="min-h-10 text-sm text-ink-muted underline underline-offset-4 hover:text-ink"
+          >
+            {showHint ? t("review.hideHint") : t("review.showHint")}
+          </button>
+          <AnimatePresence>
+            {showHint && (
+              <motion.p
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25 }}
+                className="mt-2 text-sm italic text-ink-muted text-german"
+              >
+                {current.card.hints.join(" · ")}
+              </motion.p>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* On the retry, the first verdict stays visible as guidance. */}
+      {stage === "retry" && firstTry && (
+        <div className="rounded-xl border border-line px-4 py-3">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
+            {t("review.secondTry")}
+          </p>
+          <p className="text-sm leading-relaxed text-ink-muted">
+            <RichText text={firstTry.feedback} />
+          </p>
+          <ErrorTags tags={firstTry.errorTags} />
+          {/* The card's own hint comes along for the second try. */}
+          {current.card.hints.length > 0 && (
+            <p className="mt-3 text-sm italic text-ink-muted text-german">💡 {current.card.hints.join(" · ")}</p>
+          )}
+        </div>
+      )}
+
+      <textarea
+        ref={inputRef}
+        maxLength={2000}
+        lang="de"
+        autoFocus
+        className="field text-german min-h-[6rem] resize-none"
+        rows={3}
+        placeholder={t("review.placeholder")}
+        value={answer}
+        onChange={(e) => setAnswer(e.target.value)}
+        onKeyDown={(e) => {
+          // Cmd/Ctrl+Enter submits without reaching for the mouse.
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      {/* Stacked full-width on phones, side by side from sm up. */}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={submit}
+          disabled={submitting || !answer.trim()}
+          className="btn-primary w-full sm:w-auto"
+        >
+          {submitting ? t("review.checking") : t("review.submit")}
+        </motion.button>
+        <button
+          onClick={() => void (stage === "retry" ? showAnswer() : dontKnow())}
+          disabled={submitting}
+          className="btn-ghost w-full sm:w-auto"
+        >
+          {stage === "retry" ? t("review.showAnswer") : t("review.dontKnow")}
+        </button>
+      </div>
+    </div>
+  );
+
+  const back = evaluation && (
+    <div className="space-y-4 p-5 pt-6 sm:p-7 sm:pt-7">
+      {/* The question stays in view on the back, quieter. */}
+      <p lang="de" className="text-german text-sm leading-relaxed text-ink-muted">
+        <RichText text={current.card.prompt} />
+      </p>
+
+      {/* Your answer, for comparison (none after "I don't know") */}
+      {answer && (
+        <div className="rounded-xl bg-surface-raised px-4 py-3">
+          <p lang="de" className="text-german text-sm">{answer}</p>
+        </div>
+      )}
+
+      {/* Verdict */}
+      <div className={clsx("rounded-xl border px-4 py-3", style!.wrap)}>
+        <p className={clsx("mb-1 text-sm font-semibold", style!.text)}>
+          {t(verdictLabelKey(evaluation.result, stage === "done"))}
+        </p>
+        {evaluation.feedback && (
+          <p className="text-sm leading-relaxed text-ink">
+            <RichText text={evaluation.feedback} />
+          </p>
+        )}
+        <ErrorTags tags={evaluation.errorTags} />
+      </div>
+
+      {/* Reference answer, with audio so you hear it done right */}
+      {evaluation.result !== "CORRECT" && reveal && (
+        <div className="flex items-start gap-3 rounded-xl border border-line px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">{t("review.expected")}</p>
+            <p lang="de" className="text-german">{reveal.answer}</p>
+          </div>
+          <SpeakButton text={reveal.answer} size="sm" label={t("review.listen")} />
+        </div>
+      )}
+
+      {reveal?.explanation && (
+        <p className="text-sm leading-relaxed text-ink-muted">
+          <RichText text={reveal.explanation} />
+        </p>
+      )}
+
+      {/* When one explanation isn't enough: practise the same topic. */}
+      {stage === "done" && evaluation.result !== "CORRECT" && (
+        <Link
+          href={`/tutor?topic=${encodeURIComponent(current.card.topic.id)}`}
+          className="inline-flex min-h-10 items-center text-sm font-medium text-brand underline-offset-4 hover:underline"
+        >
+          {t("review.practiseTopic")} →
+        </Link>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
       {/* Progress header */}
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="truncate rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">
-          {current.card.topic.name}
-        </span>
-        <span className="flex shrink-0 items-center gap-3 text-ink-faint">
-          <UsageMeter kind="graded" plan={plan} />
-          {t("review.progress", { done: reviewed, left: queue.length })}
-        </span>
+      <div className="flex items-center justify-end gap-3 text-sm text-ink-faint">
+        <UsageMeter kind="graded" plan={plan} />
+        {t("review.progress", { done: reviewed, left: queue.length })}
       </div>
 
-      {/* Box progress bar */}
-      <div className="flex gap-1" aria-hidden>
-        {[1, 2, 3, 4, 5].map((b) => (
-          <motion.div
-            key={b}
-            className={clsx(
-              "h-1 flex-1 rounded-full",
-              b <= current.box ? "bg-brand" : "bg-line"
-            )}
-            initial={{ scaleX: 0.6, opacity: 0.5 }}
-            animate={{ scaleX: 1, opacity: 1 }}
-            transition={{ delay: b * 0.04, duration: 0.3 }}
-          />
-        ))}
-      </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={current.card.id}
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -16 }}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="card-surface overflow-hidden"
-        >
-          {/* Prompt + audio */}
-          <div className="flex items-start gap-3 p-5 sm:p-7">
-            <div className="min-w-0 flex-1">
-              <p lang="de" className="text-german text-lg leading-relaxed sm:text-xl">
-                <RichText text={current.card.prompt} />
-              </p>
-            </div>
-            <SpeakButton
-              text={current.card.prompt}
-              autoPlay={autoPlayAudio}
-              label={t("review.listen")}
+      {/* The deck: the current card on top, up to three waiting underneath.
+          overflow-x-clip keeps the offset cards from widening the page on
+          phones while letting them show below. */}
+      <div className="relative overflow-x-clip pb-5 pr-3">
+        <div className="relative">
+          {Array.from({ length: layers }, (_, i) => layers - i).map((depth) => (
+            <div
+              key={depth}
+              aria-hidden
+              className="holo-under"
+              style={{ transform: `translate(${depth * 4}px, ${depth * 6}px) rotate(${depth * 0.8}deg)` }}
             />
-          </div>
+          ))}
 
-          <div className="space-y-4 px-5 pb-5 sm:px-7 sm:pb-7">
-            {/* Hint */}
-            {current.card.hints.length > 0 && !evaluation && (
-              <div>
-                <button
-                  onClick={() => setShowHint((s) => !s)}
-                  className="text-sm text-ink-muted underline underline-offset-4 hover:text-ink"
-                >
-                  {showHint ? t("review.hideHint") : t("review.showHint")}
-                </button>
-                <AnimatePresence>
-                  {showHint && (
-                    <motion.p
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className="mt-2 text-sm italic text-ink-muted text-german"
-                    >
-                      {current.card.hints.join(" · ")}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={current.card.id}
+              className="relative"
+              // Dealt from the deck (below-right), cleared off to the left.
+              initial={{ x: 12, y: 18, rotate: 2, opacity: 0 }}
+              animate={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+              exit={{ x: -120, rotate: -6, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <HoloCard
+                side={side}
+                front={front}
+                back={back}
+                rarity={rarityForBox(current.box)}
+                topic={current.card.topic.name}
+                streak={current.correctStreak}
+                position={cardPosition(sessionTotal, queue.length)}
+                onFlip={() => play("flip")}
+              />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
 
-            {!evaluation ? (
-              <>
-                {/* On the retry, the first verdict stays visible as guidance. */}
-                {stage === "retry" && firstTry && (
-                  <div className="rounded-xl border border-line px-4 py-3">
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
-                      {t("review.secondTry")}
-                    </p>
-                    <p className="text-sm leading-relaxed text-ink-muted">
-                      <RichText text={firstTry.feedback} />
-                    </p>
-                    <ErrorTags tags={firstTry.errorTags} />
-                    {/* The card's own hint comes along for the second try. */}
-                    {current.card.hints.length > 0 && (
-                      <p className="mt-3 text-sm italic text-ink-muted text-german">
-                        💡 {current.card.hints.join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <textarea
-                  ref={inputRef}
-                  maxLength={2000}
-                  lang="de"
-                  autoFocus
-                  className="field text-german min-h-[6rem] resize-none"
-                  rows={3}
-                  placeholder={t("review.placeholder")}
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Cmd/Ctrl+Enter submits without reaching for the mouse.
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      void submit();
-                    }
-                  }}
-                />
-                {/* Stacked full-width on phones, side by side from sm up. */}
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={submit}
-                    disabled={submitting || !answer.trim()}
-                    className="btn-primary w-full sm:w-auto"
-                  >
-                    {submitting ? t("review.checking") : t("review.submit")}
-                  </motion.button>
-                  <button
-                    onClick={() => void (stage === "retry" ? showAnswer() : dontKnow())}
-                    disabled={submitting}
-                    className="btn-ghost w-full sm:w-auto"
-                  >
-                    {stage === "retry" ? t("review.showAnswer") : t("review.dontKnow")}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                className="space-y-4"
-              >
-                {/* Your answer, for comparison (none after "I don't know") */}
-                {answer && (
-                  <div className="rounded-xl bg-surface-raised px-4 py-3">
-                    <p lang="de" className="text-german text-sm">{answer}</p>
-                  </div>
-                )}
+      {limit && <UpgradePrompt kind={limit.kind} limit={limit.limit} />}
 
-                {/* Verdict */}
-                <div className={clsx("rounded-xl border px-4 py-3", style!.wrap)}>
-                  <p className={clsx("mb-1 text-sm font-semibold", style!.text)}>
-                    {t(verdictLabelKey(evaluation.result, stage === "done"))}
-                  </p>
-                  {evaluation.feedback && (
-                    <p className="text-sm leading-relaxed text-ink">
-                      <RichText text={evaluation.feedback} />
-                    </p>
-                  )}
-                  <ErrorTags tags={evaluation.errorTags} />
-                </div>
-
-                {/* Reference answer, with audio so you hear it done right */}
-                {evaluation.result !== "CORRECT" && reveal && (
-                  <div className="flex items-start gap-3 rounded-xl border border-line px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
-                        {t("review.expected")}
-                      </p>
-                      <p lang="de" className="text-german">{reveal.answer}</p>
-                    </div>
-                    <SpeakButton text={reveal.answer} size="sm" label={t("review.listen")} />
-                  </div>
-                )}
-
-                {reveal?.explanation && (
-                  <p className="text-sm leading-relaxed text-ink-muted">
-                    <RichText text={reveal.explanation} />
-                  </p>
-                )}
-
-                {/* When one explanation isn't enough: practise the same topic. */}
-                {stage === "done" && evaluation.result !== "CORRECT" && (
-                  <Link
-                    href={`/tutor?topic=${encodeURIComponent(current.card.topic.id)}`}
-                    className="inline-flex min-h-10 items-center text-sm font-medium text-brand underline-offset-4 hover:underline"
-                  >
-                    {t("review.practiseTopic")} →
-                  </Link>
-                )}
-
-              </motion.div>
-            )}
-
-            {limit && <UpgradePrompt kind={limit.kind} limit={limit.limit} />}
-
-            {error && (
-              <p className="rounded-xl border border-critical/30 bg-critical/10 px-4 py-3 text-sm text-critical">
-                {error}
-              </p>
-            )}
-          </div>
-        </motion.div>
-      </AnimatePresence>
+      {error && (
+        <p className="rounded-xl border border-critical/30 bg-critical/10 px-4 py-3 text-sm text-critical">{error}</p>
+      )}
 
       {/* Outside the card so it can stick: however long the feedback, the
           button stays in reach. On phones it sits above the bottom nav. */}
