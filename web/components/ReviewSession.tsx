@@ -13,6 +13,7 @@ import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 import { afterAnswer, verdictLabelKey } from "@/lib/review-flow";
 import HoloCard from "@/components/HoloCard";
+import { usePlayerProgress } from "@/components/usePlayerProgress";
 import { announceProgress } from "@/lib/progress-events";
 import AiWaiting from "@/components/AiWaiting";
 import { cardPosition, deckLayers, rarityForBox } from "@/lib/card-look";
@@ -91,6 +92,12 @@ export default function ReviewSession() {
   // Session tally for the completion screen.
   const [reviewed, setReviewed] = useState(0);
   const [correct, setCorrect] = useState(0);
+  // XP at the start of this visit, to show what the session earned.
+  const { progress: player } = usePlayerProgress();
+  const startXp = useRef<number | null>(null);
+  useEffect(() => {
+    if (player && startXp.current === null) startXp.current = player.xp;
+  }, [player]);
   // Size of the deck when the session was dealt, for "#n / total".
   const [sessionTotal, setSessionTotal] = useState(0);
 
@@ -299,6 +306,11 @@ export default function ReviewSession() {
           </p>
         ) : (
           <p className="mx-auto mt-2 max-w-sm text-ink-muted">{t("review.empty.body")}</p>
+        )}
+        {finished && player && startXp.current !== null && player.xp > startXp.current && (
+          <p className="mt-2 font-bold text-gold">
+            {t("review.sessionXp", { n: player.xp - startXp.current })}
+          </p>
         )}
 
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

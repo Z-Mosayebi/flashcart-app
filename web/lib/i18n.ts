@@ -96,6 +96,11 @@ const en = {
   "tutor.noTopics": "No topics yet. Sync your notes to get started.",
 
   "dashboard.title": "Progress",
+  "settings.goal": "Daily goal",
+  "settings.goalHint": "Cards per day. Reaching it earns +20 XP.",
+  "settings.goalPremium": "Premium",
+  "tutor.masteredXp": "+25 XP",
+  "review.sessionXp": "+{n} XP this session",
   "dashboard.today": "Today",
   "dashboard.goalLeft": "{n} more to reach today's goal — +20 XP when you do.",
   "dashboard.goalDone": "Goal reached — +20 XP earned today! 🎉",
@@ -373,6 +378,11 @@ const de: Record<TranslationKey, string> = {
   "tutor.noTopics": "Noch keine Themen. Synchronisiere deine Notizen, um zu beginnen.",
 
   "dashboard.title": "Fortschritt",
+  "settings.goal": "Tagesziel",
+  "settings.goalHint": "Karten pro Tag. Erreichst du es, gibt es +20 XP.",
+  "settings.goalPremium": "Premium",
+  "tutor.masteredXp": "+25 XP",
+  "review.sessionXp": "+{n} XP in dieser Runde",
   "dashboard.today": "Heute",
   "dashboard.goalLeft": "Noch {n} bis zum Tagesziel — dafür gibt es +20 XP.",
   "dashboard.goalDone": "Tagesziel erreicht — +20 XP verdient! 🎉",

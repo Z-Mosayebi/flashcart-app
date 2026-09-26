@@ -271,7 +271,12 @@ export default function TutorChat() {
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </motion.div>
-              <p className="font-medium text-positive">{t("tutor.mastered.title")}</p>
+              <p className="font-medium text-positive">
+                {t("tutor.mastered.title")}
+                <span className="ml-2 rounded-full bg-gold/20 px-2 py-0.5 text-xs font-bold text-gold">
+                  {t("tutor.masteredXp")}
+                </span>
+              </p>
               <p className="mt-1 text-sm text-ink-muted">{t("tutor.mastered.body")}</p>
               <button onClick={reset} className="btn-ghost mt-4">
                 {t("tutor.newSession")}

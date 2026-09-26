@@ -10,6 +10,7 @@ import SpeakButton from "@/components/SpeakButton";
 import DriveConnect from "@/components/DriveConnect";
 import UserAvatar from "@/components/UserAvatar";
 import PlanCard from "@/components/PlanCard";
+import DailyGoalPicker from "@/components/DailyGoalPicker";
 import UploadPanel from "@/components/UploadPanel";
 
 /** Segmented control used for both language and theme. */
@@ -87,6 +88,11 @@ export default function SettingsPanel() {
       {/* Plan — what this account can do, and the way to more. */}
       <section className="card-surface p-5 sm:p-6">
         <PlanCard />
+      </section>
+
+      {/* Daily goal — part of the game: reaching it earns bonus XP. */}
+      <section className="card-surface p-5 sm:p-6">
+        <DailyGoalPicker />
       </section>
 
       {/* Content sources: a file from the computer works for everyone; Drive
