@@ -99,6 +99,17 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class TutorFocus(BaseModel):
+    """The flashcard a learner just missed, when they open the tutor from it."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    card_prompt: str = Field(..., alias="cardPrompt", max_length=MAX_ANSWER_CHARS)
+    expected_answer: str = Field(..., alias="expectedAnswer", max_length=MAX_ANSWER_CHARS)
+    learner_answer: Optional[str] = Field(None, alias="learnerAnswer", max_length=MAX_ANSWER_CHARS)
+    feedback: Optional[str] = Field(None, max_length=MAX_ANSWER_CHARS)
+
+
 class TutorChatRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -106,6 +117,7 @@ class TutorChatRequest(BaseModel):
     topic_pattern: Optional[str] = Field(None, alias="topicPattern")
     history: list[ChatMessage] = Field(default_factory=list, max_length=MAX_HISTORY_MESSAGES)
     user_message: str = Field(..., alias="userMessage", max_length=MAX_ANSWER_CHARS)
+    focus: Optional[TutorFocus] = None
 
 
 class TutorChatResponse(BaseModel):

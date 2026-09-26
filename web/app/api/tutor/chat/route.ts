@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
 import { reserveAiCall } from "@/lib/entitlements";
-import { tutorChat } from "@/lib/ai";
+import { tutorChat, type TutorFocus } from "@/lib/ai";
 
 /** How many prior turns to replay to the model. Keeps prompt size bounded on
  *  long sessions while preserving enough context to judge mastery. */
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  let body: { topicId?: string; sessionId?: string; message?: string };
+  let body: { topicId?: string; sessionId?: string; message?: string; cardId?: string };
   try {
     body = await req.json();
   } catch {
@@ -82,6 +82,29 @@ export async function POST(req: NextRequest) {
     content: m.content,
   }));
 
+  // Opened from a missed review card: the tutor works on that card. Owner-
+  // and topic-scoped, so a guessed id can't pull in someone else's card.
+  let focus: TutorFocus | undefined;
+  if (typeof body.cardId === "string" && body.cardId) {
+    const card = await prisma.card.findFirst({
+      where: { id: body.cardId, ownerId: userId, topicId },
+      select: { prompt: true, answer: true },
+    });
+    if (card) {
+      const last = await prisma.attempt.findFirst({
+        where: { userId, cardId: body.cardId },
+        orderBy: { createdAt: "desc" },
+        select: { userAnswer: true, aiFeedback: true, kind: true },
+      });
+      focus = {
+        cardPrompt: card.prompt,
+        expectedAnswer: card.answer,
+        learnerAnswer: last && last.kind !== "DONT_KNOW" ? last.userAnswer : undefined,
+        feedback: last?.aiFeedback ?? undefined,
+      };
+    }
+  }
+
   let result;
   try {
     result = await tutorChat({
@@ -89,6 +112,7 @@ export async function POST(req: NextRequest) {
       topicPattern: topic.pattern ?? undefined,
       history,
       userMessage: message,
+      focus,
     });
   } catch (err) {
     console.error("tutorChat failed", err);

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -51,7 +52,10 @@ export default function TutorChat() {
 
   // Arriving from a review card ("Practise this with the tutor") names the
   // topic in the URL; the session opens on it straight away, once.
-  const requestedTopic = useSearchParams().get("topic");
+  const params = useSearchParams();
+  const requestedTopic = params.get("topic");
+  // The review card that sent the learner here, if any: the tutor practises it.
+  const fromCard = params.get("card");
 
   useEffect(() => {
     fetch("/api/topics")
@@ -84,6 +88,8 @@ export default function TutorChat() {
             topicId: activeTopic.id,
             sessionId: activeSession,
             message: text,
+            // Only for the topic the card belongs to.
+            cardId: fromCard && activeTopic.id === requestedTopic ? fromCard : undefined,
           }),
         });
         const hit = await readLimitHit(res);
@@ -105,7 +111,7 @@ export default function TutorChat() {
         setSending(false);
       }
     },
-    [t, reload]
+    [t, reload, fromCard, requestedTopic]
   );
 
   function startSession(chosen: Topic) {
@@ -199,9 +205,15 @@ export default function TutorChat() {
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <UsageMeter kind="tutor" plan={plan} />
-          <button onClick={reset} className="text-sm text-ink-muted hover:text-ink">
-            {t("tutor.back")}
-          </button>
+          {fromCard ? (
+            <Link href="/review" className="btn-ghost min-h-10 px-3 py-2 text-sm">
+              ← {t("tutor.backToReview")}
+            </Link>
+          ) : (
+            <button onClick={reset} className="min-h-10 text-sm text-ink-muted hover:text-ink">
+              {t("tutor.back")}
+            </button>
+          )}
         </div>
       </header>
 

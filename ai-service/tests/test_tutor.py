@@ -227,3 +227,33 @@ def test_prompt_forbids_revealing_before_the_retry():
     from app.services.tutor import SYSTEM_PROMPT
 
     assert "Reveal answer" in SYSTEM_PROMPT
+
+
+@patch("app.services.tutor_chat.ask_json")
+def test_session_opened_from_a_card_starts_on_that_card(mock_ask_json):
+    """From "Practise this with the tutor", the first turn targets the missed card."""
+    mock_ask_json.return_value = {"reply": "Lass uns 'Anbindung an + Akk.' üben.", "mastered": False}
+    chat_turn(
+        TutorChatRequest(
+            topicName="Häufige Fehler",
+            history=[],
+            userMessage="",
+            focus={
+                "cardPrompt": "Wie ist denn da die ___ an den Flughafen?",
+                "expectedAnswer": "Anbindung",
+                "learnerAnswer": "Verbindung",
+                "feedback": "Wrong noun for 'an + Akkusativ'.",
+            },
+        )
+    )
+    prompt = mock_ask_json.call_args[0][1]
+    assert "Wie ist denn da die ___ an den Flughafen?" in prompt
+    assert "Anbindung" in prompt and "Verbindung" in prompt
+    assert "Start with this card" in prompt
+
+
+@patch("app.services.tutor_chat.ask_json")
+def test_session_without_a_card_is_unchanged(mock_ask_json):
+    mock_ask_json.return_value = {"reply": "Hallo!", "mastered": False}
+    chat_turn(TutorChatRequest(topicName="Dativ", history=[], userMessage=""))
+    assert "Start with this card" not in mock_ask_json.call_args[0][1]
