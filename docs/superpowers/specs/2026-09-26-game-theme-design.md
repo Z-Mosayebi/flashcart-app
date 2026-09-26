@@ -123,3 +123,11 @@ DONT_KNOW; `down.sql` reverses all three. Rolled out with backup → rehearsal
 - Visual check at ≈375px and desktop in both modes; light-mode contrast
   checked. Owner gets a short test list (the app needs sign-in).
 - Final independent whole-branch review before going online.
+
+## Amendment (after final review): goal bonus is recorded, not re-scored
+
+Counting past days against the *current* goal let a goal change lower a
+learner's level or trigger a level-up from Settings. Instead, a `GoalDay`
+row is written once when a day's goal is reached (after a first answer, an
+"I don't know", or a goal change); the +20 bonus counts those rows. The
+migration backfills past days at the default goal of 10.
