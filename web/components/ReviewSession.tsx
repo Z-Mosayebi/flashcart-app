@@ -6,6 +6,8 @@ import Link from "next/link";
 import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
 import SpeakButton from "@/components/SpeakButton";
+import RichText from "@/components/RichText";
+import ErrorTags from "@/components/ErrorTags";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
@@ -221,7 +223,7 @@ export default function ReviewSession() {
         </span>
         <span className="flex shrink-0 items-center gap-3 text-ink-faint">
           <UsageMeter kind="graded" plan={plan} />
-          {t("review.remaining", { count: queue.length })}
+          {t("review.progress", { done: reviewed, left: queue.length })}
         </span>
       </div>
 
@@ -254,7 +256,7 @@ export default function ReviewSession() {
           <div className="flex items-start gap-3 p-5 sm:p-7">
             <div className="min-w-0 flex-1">
               <p lang="de" className="text-german text-lg leading-relaxed sm:text-xl">
-                {current.card.prompt}
+                <RichText text={current.card.prompt} />
               </p>
             </div>
             <SpeakButton
@@ -336,19 +338,10 @@ export default function ReviewSession() {
                   <p className={clsx("mb-1 text-sm font-semibold", style!.text)}>
                     {t(style!.labelKey as "review.correct")}
                   </p>
-                  <p className="text-sm leading-relaxed text-ink">{evaluation.feedback}</p>
-                  {evaluation.errorTags.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {evaluation.errorTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full bg-surface px-2 py-0.5 text-[11px] text-ink-muted"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <p className="text-sm leading-relaxed text-ink">
+                    <RichText text={evaluation.feedback} />
+                  </p>
+                  <ErrorTags tags={evaluation.errorTags} />
                 </div>
 
                 {/* Reference answer, with audio so you hear it done right */}
@@ -366,18 +359,10 @@ export default function ReviewSession() {
 
                 {reveal?.explanation && (
                   <p className="text-sm leading-relaxed text-ink-muted">
-                    {reveal.explanation}
+                    <RichText text={reveal.explanation} />
                   </p>
                 )}
 
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={next}
-                  autoFocus
-                  className="btn-primary w-full sm:w-auto"
-                >
-                  {t("review.next")}
-                </motion.button>
               </motion.div>
             )}
 
@@ -391,6 +376,21 @@ export default function ReviewSession() {
           </div>
         </motion.div>
       </AnimatePresence>
+
+      {/* Outside the card so it can stick: however long the feedback, the
+          button stays in reach. On phones it sits above the bottom nav. */}
+      {evaluation && (
+        <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 -mx-4 bg-gradient-to-t from-canvas via-canvas/95 to-transparent px-4 pb-2 pt-6 sm:bottom-4 sm:mx-0 sm:px-0">
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={next}
+            autoFocus
+            className="btn-primary w-full shadow-lg sm:w-auto"
+          >
+            {t("review.next")}
+          </motion.button>
+        </div>
+      )}
     </div>
   );
 }
