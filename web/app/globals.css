@@ -122,7 +122,8 @@
     inset: 0;
     pointer-events: none;
     mix-blend-mode: color-dodge;
-    opacity: 0.35;
+    /* Kept faint on purpose: a hint of foil, not a rainbow over the text. */
+    opacity: 0.1;
     background: linear-gradient(
       115deg,
       transparent 20%,
@@ -132,7 +133,7 @@
       transparent 70%
     );
     background-size: 250% 250%;
-    animation: holo-sheen 6s ease-in-out infinite;
+    animation: holo-sheen 14s ease-in-out infinite;
   }
 
   .holo-band {
