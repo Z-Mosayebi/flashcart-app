@@ -417,6 +417,27 @@ cd web && npx prisma migrate deploy
 
 Its reverse is `web/prisma/migrations/20260926000000_premium_trial/down.sql`.
 
+#### Game mechanics
+
+Every signed-in page shows a player bar: level, XP, day streak and today's goal.
+
+| Event | XP |
+|---|---|
+| First answer correct / almost / wrong | +10 / +5 / +2 |
+| Correct on the retry | +3 |
+| "I don't know" | 0 |
+| Message to the tutor | +2 |
+| Topic mastered with the tutor | +25 |
+| Daily goal reached | +20 (once a day) |
+
+Level L starts at `25 · L · (L − 1)` XP (level 2 at 50, 3 at 150, 4 at 300,
+5 at 500). XP is computed from stored answers, so changing the rules
+re-scores everyone. The daily goal (Settings) is 5, 10, 20 or 30 cards;
+30 needs premium. Days and streaks follow each learner's own time zone.
+
+This adds migration `20260928000000_game_mechanics` (`Attempt.kind`,
+`User.dailyGoal`); roll it out like the others (backup, rehearse, deploy).
+
 ### 8. Trying card generation offline (optional)
 
 To see what the generator makes of a document without running the web app —

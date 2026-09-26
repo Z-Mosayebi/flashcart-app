@@ -108,6 +108,24 @@ const CHECKS = {
       check("NotionConnection restored", (await columnsOf(tx, "NotionConnection")) !== null);
     },
   },
+  "20260928000000_game_mechanics": {
+    async up(tx) {
+      check("User.dailyGoal added", (await columnsOf(tx, "User")).includes("dailyGoal"));
+      check("Attempt.kind added", (await columnsOf(tx, "Attempt")).includes("kind"));
+      const [row] = await tx.$queryRawUnsafe(
+        `SELECT COUNT(*) FILTER (WHERE "userAnswer" = '—')::int AS dk,
+                COUNT(*) FILTER (WHERE "kind"::text = 'DONT_KNOW')::int AS marked
+           FROM "Attempt"`
+      );
+      check("old 'I don't know' answers marked DONT_KNOW", row.dk === row.marked, JSON.stringify(row));
+      check("GoalDay created", (await columnsOf(tx, "GoalDay")) !== null);
+    },
+    async down(tx) {
+      check("User.dailyGoal removed", !(await columnsOf(tx, "User")).includes("dailyGoal"));
+      check("Attempt.kind removed", !(await columnsOf(tx, "Attempt")).includes("kind"));
+      check("GoalDay removed", (await columnsOf(tx, "GoalDay")) === null);
+    },
+  },
   "20260927000000_user_blocking": {
     async up(tx) {
       check("User.blockedAt added", (await columnsOf(tx, "User")).includes("blockedAt"));

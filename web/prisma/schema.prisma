@@ -39,6 +39,9 @@ model User {
   // session stops working on its next request. Null means active.
   blockedAt DateTime?
 
+  // Cards per day the learner aims for: 5, 10, 20 or 30 (30 needs premium).
+  dailyGoal Int @default(10)
+
   accounts         Account[]
   sessions         Session[]
   resetTokens      PasswordResetToken[]
@@ -51,6 +54,7 @@ model User {
   driveConnection  DriveConnection?
   premiumRequests  PremiumRequest[]
   aiUsage          AiUsage[]
+  goalDays         GoalDay[]
 }
 
 // ---------- NextAuth ----------
@@ -297,6 +301,14 @@ enum AttemptResult {
   INCORRECT
 }
 
+// First answer to a card, the one retry after a miss, or "I don't know".
+// Only first answers move a card between boxes; XP weighs each differently.
+enum AttemptKind {
+  FIRST
+  RETRY
+  DONT_KNOW
+}
+
 model Attempt {
   id         String        @id @default(cuid())
   userId     String
@@ -305,6 +317,7 @@ model Attempt {
   result     AttemptResult
   aiFeedback String?       @db.Text // AI's explanation of what was wrong/right
   errorTags  String[]      @default([]) // e.g. ["word-order", "case-declension"]
+  kind       AttemptKind   @default(FIRST)
   createdAt  DateTime      @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -423,4 +436,18 @@ model AiUsage {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, kind, createdAt])
+}
+
+// A user-local day on which the learner reached their daily goal, recorded
+// once at the moment it happens. The +20 XP bonus counts these rows, so
+// changing the goal later never re-scores (or takes back) past days.
+model GoalDay {
+  userId    String
+  /// YYYY-MM-DD in the learner's time zone.
+  day       String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
 }

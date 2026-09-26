@@ -19,32 +19,17 @@ const NAV: NavItem[] = [
   {
     href: "/review",
     labelKey: "nav.review",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="6" width="20" height="13" rx="2" />
-        <path d="M6 3h12" />
-      </svg>
-    ),
+    icon: <span aria-hidden className="text-lg leading-none">🃏</span>,
   },
   {
     href: "/tutor",
     labelKey: "nav.tutor",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
+    icon: <span aria-hidden className="text-lg leading-none">💬</span>,
   },
   {
     href: "/dashboard",
     labelKey: "nav.dashboard",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="18" y1="20" x2="18" y2="10" />
-        <line x1="12" y1="20" x2="12" y2="4" />
-        <line x1="6" y1="20" x2="6" y2="14" />
-      </svg>
-    ),
+    icon: <span aria-hidden className="text-lg leading-none">🏆</span>,
   },
 ];
 
@@ -52,11 +37,7 @@ const NAV: NavItem[] = [
 const ADMIN_ITEM: NavItem = {
   href: "/admin",
   labelKey: "nav.admin",
-  icon: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  ),
+  icon: <span aria-hidden className="text-lg leading-none">🛡️</span>,
 };
 
 export default function NavBar() {
@@ -100,7 +81,10 @@ export default function NavBar() {
                         transition={{ type: "spring", stiffness: 380, damping: 30 }}
                       />
                     )}
-                    <span className="relative">{t(item.labelKey)}</span>
+                    <span className="relative flex items-center gap-1.5">
+                      {item.icon}
+                      {t(item.labelKey)}
+                    </span>
                   </Link>
                 );
               })}

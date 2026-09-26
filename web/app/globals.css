@@ -3,31 +3,40 @@
 @tailwind utilities;
 
 @layer base {
+  /* Light game mode: warm cream, gold frames, purple actions. */
   :root {
-    --canvas: 250 250 249;
+    --canvas: 250 246 236;
     --surface: 255 255 255;
-    --surface-raised: 255 255 255;
-    --line: 231 229 228;
-    --ink: 28 25 23;
-    --ink-muted: 87 83 78;
-    --ink-faint: 168 162 158;
-    --brand: 79 70 229;
-    --brand-soft: 238 242 255;
-    --positive: 5 150 105;
-    --caution: 217 119 6;
-    --critical: 225 29 72;
+    --surface-raised: 255 250 238;
+    --line: 236 220 174;
+    --ink: 27 35 64;
+    --ink-muted: 88 94 122;
+    --ink-faint: 139 143 166;
+    --brand: 98 80 224;
+    --brand-2: 112 88 236;
+    --brand-soft: 238 235 255;
+    /* Dark enough for gold text (XP, badges) to read on cream and white. */
+    --gold: 140 100 20;
+    --glow: 255 243 214;
+    --positive: 4 120 87;
+    --caution: 180 83 9;
+    --critical: 190 18 60;
   }
 
+  /* Dark game mode: deep navy, gold and purple glow. */
   .dark {
-    --canvas: 12 10 9;
-    --surface: 28 25 23;
-    --surface-raised: 41 37 36;
-    --line: 68 64 60;
-    --ink: 250 250 249;
-    --ink-muted: 168 162 158;
-    --ink-faint: 120 113 108;
-    --brand: 129 140 248;
-    --brand-soft: 30 27 75;
+    --canvas: 13 16 32;
+    --surface: 26 32 54;
+    --surface-raised: 34 41 68;
+    --line: 52 61 96;
+    --ink: 238 240 255;
+    --ink-muted: 182 190 216;
+    --ink-faint: 130 140 175;
+    --brand: 104 86 230;
+    --brand-2: 140 80 230;
+    --brand-soft: 42 36 92;
+    --gold: 232 198 90;
+    --glow: 29 33 64;
     --positive: 52 211 153;
     --caution: 251 191 36;
     --critical: 251 113 133;
@@ -40,6 +49,9 @@
   body {
     @apply bg-canvas text-ink antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* A soft glow at the top of every page. Not fixed (mobile Safari). */
+    background-image: radial-gradient(120% 60% at 50% 0%, rgb(var(--glow)) 0%, transparent 60%);
+    background-repeat: no-repeat;
   }
 
   /* Respect users who prefer reduced motion — disable all animation */
@@ -62,21 +74,29 @@
 
 @layer components {
   .card-surface {
-    @apply bg-surface border border-line rounded-2xl shadow-card;
+    @apply rounded-2xl border bg-surface;
+    border-color: rgb(var(--gold) / 0.28);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 10px 26px -10px rgb(var(--gold) / 0.28);
+  }
+  .dark .card-surface {
+    box-shadow: 0 0 0 1px rgb(var(--line)), 0 0 22px -6px rgb(var(--brand) / 0.35);
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3
-           font-medium text-white transition-all duration-200
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3
+           font-semibold text-white transition-all duration-200
            hover:brightness-110 active:scale-[0.98]
            disabled:opacity-40 disabled:pointer-events-none;
+    background-image: linear-gradient(90deg, rgb(var(--brand)), rgb(var(--brand-2)));
+    box-shadow: 0 6px 18px -4px rgb(var(--brand) / 0.55);
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border
            bg-surface px-5 py-3 font-medium text-ink transition-all duration-200
            hover:bg-surface-raised active:scale-[0.98]
            disabled:opacity-40 disabled:pointer-events-none;
+    border-color: rgb(var(--gold) / 0.45);
   }
 
   .field {
@@ -97,7 +117,9 @@
     --ink: 243 240 255;
     --ink-muted: 182 190 216;
     --ink-faint: 130 140 175;
-    --brand: 139 123 255;
+    --brand: 104 86 230;
+    --brand-2: 140 80 230;
+    --gold: 232 198 90;
     --brand-soft: 42 36 92;
     --positive: 52 211 153;
     --caution: 251 191 36;

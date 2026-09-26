@@ -2,10 +2,13 @@
 
 import { isLocale, type Locale } from "@/lib/i18n";
 import { isValidTimeZone } from "@/lib/plans";
+import { isDailyGoal, type DailyGoal } from "@/lib/game";
 
 export interface PreferencesUpdate {
   locale?: Locale;
   timeZone?: string;
+  /** Allowed goals only; whether 30 is permitted is checked by the route (premium). */
+  dailyGoal?: DailyGoal;
 }
 
 /**
@@ -20,6 +23,7 @@ export function preferencesUpdate(body: unknown): PreferencesUpdate | null {
   const update: PreferencesUpdate = {};
   if (isLocale(b.locale)) update.locale = b.locale;
   if (isValidTimeZone(b.timeZone)) update.timeZone = b.timeZone;
+  if (isDailyGoal(b.dailyGoal)) update.dailyGoal = b.dailyGoal;
 
   return Object.keys(update).length > 0 ? update : null;
 }

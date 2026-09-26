@@ -7,7 +7,7 @@
  * before that is silently skipped rather than queued.
  */
 
-export type CardSound = "deal" | "flip" | "correct" | "wrong" | "complete";
+export type CardSound = "deal" | "flip" | "correct" | "wrong" | "complete" | "levelUp";
 
 let ctx: AudioContext | null = null;
 
@@ -88,6 +88,10 @@ const PLAYERS: Record<CardSound, (ac: AudioContext) => void> = {
     osc.connect(envelope(ac, 0.1, 0.02, 0.3)).connect(ac.destination);
     osc.start(t);
     osc.stop(t + 0.36);
+  },
+  // New level: a bright rising fanfare.
+  levelUp(ac) {
+    [523, 659, 784, 1047, 1319].forEach((f, i) => tone(ac, f, i * 0.08, 0.35, 0.11, "triangle"));
   },
   // Deck finished: a short rising arpeggio.
   complete(ac) {

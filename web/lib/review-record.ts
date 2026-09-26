@@ -19,6 +19,8 @@ export interface FirstAnswer {
   userAnswer: string;
   feedback: string | null;
   errorTags: string[];
+  /** A graded first answer, or "I don't know" (which earns no XP). */
+  kind: "FIRST" | "DONT_KNOW";
 }
 
 export type RecordOutcome = { ok: true; progress: CardProgress } | { ok: false; duplicate: true };
@@ -81,6 +83,7 @@ export async function recordFirstAnswer(a: FirstAnswer): Promise<RecordOutcome> 
           result: a.result,
           aiFeedback: a.feedback,
           errorTags: a.errorTags,
+          kind: a.kind,
         },
       });
 
