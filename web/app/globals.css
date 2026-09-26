@@ -215,3 +215,21 @@
   50% { background-position: 100% 100%; }
   100% { background-position: 0% 0%; }
 }
+
+/* Indeterminate progress: a highlight that keeps sliding across the bar. */
+.wait-bar {
+  position: relative;
+}
+.wait-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: rgb(var(--brand));
+  animation: wait-slide 1.4s ease-in-out infinite;
+}
+@keyframes wait-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}

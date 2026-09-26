@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
 import SpeakButton from "@/components/SpeakButton";
 import UpgradePrompt from "@/components/UpgradePrompt";
+import AiWaiting from "@/components/AiWaiting";
 import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 
@@ -239,22 +240,14 @@ export default function TutorChat() {
         </AnimatePresence>
 
         {sending && (
+          // A tutor "typing" bubble, with messages that keep up with long waits.
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center gap-2 text-sm text-ink-faint"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-[85%] rounded-2xl rounded-tl-sm bg-surface-raised px-5 py-4"
           >
-            <span className="flex gap-1">
-              {[0, 1, 2].map((i) => (
-                <motion.span
-                  key={i}
-                  className="h-1.5 w-1.5 rounded-full bg-ink-faint"
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15 }}
-                />
-              ))}
-            </span>
-            {t("tutor.thinking")}
+            <AiWaiting context="tutor" />
           </motion.div>
         )}
 

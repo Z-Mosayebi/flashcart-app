@@ -13,6 +13,7 @@ import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 import { afterAnswer, verdictLabelKey } from "@/lib/review-flow";
 import HoloCard from "@/components/HoloCard";
+import AiWaiting from "@/components/AiWaiting";
 import { cardPosition, deckLayers, rarityForBox } from "@/lib/card-look";
 import { playCardSound, type CardSound } from "@/lib/card-sounds";
 
@@ -81,6 +82,8 @@ export default function ReviewSession() {
   const [firstTry, setFirstTry] = useState<Evaluation | null>(null);
   const { plan, reload } = usePlan();
   const [submitting, setSubmitting] = useState(false);
+  // True only while the AI grades an answer (not for quick, local actions).
+  const [grading, setGrading] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -132,6 +135,7 @@ export default function ReviewSession() {
   async function submit() {
     if (!current || !answer.trim() || submitting) return;
     setSubmitting(true);
+    setGrading(true);
     setError(null);
     try {
       const res = await fetch("/api/review/submit", {
@@ -167,6 +171,7 @@ export default function ReviewSession() {
       setError(t("common.error"));
     } finally {
       setSubmitting(false);
+      setGrading(false);
     }
   }
 
@@ -312,7 +317,22 @@ export default function ReviewSession() {
   const layers = deckLayers(queue.length);
 
   const front = (
-    <div className="space-y-4 p-5 pt-6 sm:p-7 sm:pt-7">
+    <div className="relative space-y-4 p-5 pt-6 sm:p-7 sm:pt-7">
+      {/* While the AI grades: cover the card with a clear "working" state. */}
+      <AnimatePresence>
+        {grading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="absolute inset-0 z-10 flex items-center justify-center bg-[rgb(var(--surface)/0.9)] px-6 backdrop-blur-sm"
+          >
+            <AiWaiting context="review" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-start gap-3">
         <p lang="de" className="text-german min-w-0 flex-1 text-lg leading-relaxed sm:text-xl">
           <RichText text={current.card.prompt} />
@@ -375,6 +395,7 @@ export default function ReviewSession() {
         rows={3}
         placeholder={t("review.placeholder")}
         value={answer}
+        readOnly={submitting}
         onChange={(e) => setAnswer(e.target.value)}
         onKeyDown={(e) => {
           // Cmd/Ctrl+Enter submits without reaching for the mouse.
@@ -488,10 +509,9 @@ export default function ReviewSession() {
               key={current.card.id}
               className="relative"
               // Dealt from the deck (below-right), cleared off to the left.
-              initial={{ x: 12, y: 18, rotate: 2, opacity: 0 }}
-              animate={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-              exit={{ x: -120, rotate: -6, opacity: 0 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ x: 14, y: 20, rotate: 2, opacity: 0 }}
+              animate={{ x: 0, y: 0, rotate: 0, opacity: 1, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] } }}
+              exit={{ x: -110, rotate: -5, opacity: 0, transition: { duration: 0.45, ease: [0.4, 0, 0.2, 1] } }}
             >
               <HoloCard
                 side={side}
