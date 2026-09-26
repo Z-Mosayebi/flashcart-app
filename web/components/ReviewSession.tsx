@@ -18,7 +18,7 @@ interface Card {
   type: string;
   prompt: string;
   hints: string[];
-  topic: { name: string; pattern: string | null };
+  topic: { id: string; name: string; pattern: string | null };
 }
 
 interface DueCard {
@@ -32,6 +32,7 @@ interface Evaluation {
   feedback: string;
   errorTags: string[];
   difficulty: number;
+  gaveUp?: boolean;
 }
 
 /** Sent by the submit endpoint only after the learner has answered. */
@@ -126,7 +127,7 @@ export default function ReviewSession() {
       const isRetry = stage === "retry";
       setEvaluation(data.evaluation);
       setReveal(data.reveal ?? null);
-      setStage(afterAnswer(data.evaluation.result, isRetry));
+      setStage(afterAnswer(data.evaluation.result, isRetry, data.evaluation.gaveUp));
       reload();
       // The session tally, like the Leitner box, reflects the first answer.
       if (!isRetry) {
@@ -147,6 +148,38 @@ export default function ReviewSession() {
     setAnswer("");
     setStage("retry");
     setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
+  /**
+   * "I don't know" before answering: the card counts as not known and the
+   * answer is shown right away — no model call, no allowance used.
+   */
+  async function dontKnow() {
+    if (!current || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/review/dont-know", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: current.card.id }),
+      });
+      if (res.status === 409) {
+        next();
+        return;
+      }
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      setAnswer("");
+      setEvaluation({ result: "INCORRECT", feedback: "", errorTags: [], difficulty: 1, gaveUp: true });
+      setReveal(data.reveal);
+      setStage("done");
+      setReviewed((n) => n + 1);
+    } catch {
+      setError(t("common.error"));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   /** Skip the retry and see the reference answer. */
@@ -337,6 +370,12 @@ export default function ReviewSession() {
                       <RichText text={firstTry.feedback} />
                     </p>
                     <ErrorTags tags={firstTry.errorTags} />
+                    {/* The card's own hint comes along for the second try. */}
+                    {current.card.hints.length > 0 && (
+                      <p className="mt-3 text-sm italic text-ink-muted text-german">
+                        💡 {current.card.hints.join(" · ")}
+                      </p>
+                    )}
                   </div>
                 )}
                 <textarea
@@ -357,14 +396,24 @@ export default function ReviewSession() {
                     }
                   }}
                 />
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={submit}
-                  disabled={submitting || !answer.trim()}
-                  className="btn-primary w-full sm:w-auto"
-                >
-                  {submitting ? t("review.checking") : t("review.submit")}
-                </motion.button>
+                {/* Stacked full-width on phones, side by side from sm up. */}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={submit}
+                    disabled={submitting || !answer.trim()}
+                    className="btn-primary w-full sm:w-auto"
+                  >
+                    {submitting ? t("review.checking") : t("review.submit")}
+                  </motion.button>
+                  <button
+                    onClick={() => void (stage === "retry" ? showAnswer() : dontKnow())}
+                    disabled={submitting}
+                    className="btn-ghost w-full sm:w-auto"
+                  >
+                    {stage === "retry" ? t("review.showAnswer") : t("review.dontKnow")}
+                  </button>
+                </div>
               </>
             ) : (
               <motion.div
@@ -373,19 +422,23 @@ export default function ReviewSession() {
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className="space-y-4"
               >
-                {/* Your answer, for comparison */}
-                <div className="rounded-xl bg-surface-raised px-4 py-3">
-                  <p lang="de" className="text-german text-sm">{answer}</p>
-                </div>
+                {/* Your answer, for comparison (none after "I don't know") */}
+                {answer && (
+                  <div className="rounded-xl bg-surface-raised px-4 py-3">
+                    <p lang="de" className="text-german text-sm">{answer}</p>
+                  </div>
+                )}
 
                 {/* Verdict */}
                 <div className={clsx("rounded-xl border px-4 py-3", style!.wrap)}>
                   <p className={clsx("mb-1 text-sm font-semibold", style!.text)}>
                     {t(verdictLabelKey(evaluation.result, stage === "done"))}
                   </p>
-                  <p className="text-sm leading-relaxed text-ink">
-                    <RichText text={evaluation.feedback} />
-                  </p>
+                  {evaluation.feedback && (
+                    <p className="text-sm leading-relaxed text-ink">
+                      <RichText text={evaluation.feedback} />
+                    </p>
+                  )}
                   <ErrorTags tags={evaluation.errorTags} />
                 </div>
 
@@ -406,6 +459,16 @@ export default function ReviewSession() {
                   <p className="text-sm leading-relaxed text-ink-muted">
                     <RichText text={reveal.explanation} />
                   </p>
+                )}
+
+                {/* When one explanation isn't enough: practise the same topic. */}
+                {stage === "done" && evaluation.result !== "CORRECT" && (
+                  <Link
+                    href={`/tutor?topic=${encodeURIComponent(current.card.topic.id)}`}
+                    className="inline-flex min-h-10 items-center text-sm font-medium text-brand underline-offset-4 hover:underline"
+                  >
+                    {t("review.practiseTopic")} →
+                  </Link>
                 )}
 
               </motion.div>

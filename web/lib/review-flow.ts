@@ -10,13 +10,18 @@
 export type Verdict = "CORRECT" | "PARTIAL" | "INCORRECT";
 export type CardStage = "retry-offered" | "done";
 
-export function afterAnswer(result: Verdict, isRetry: boolean): CardStage {
-  return result !== "CORRECT" && !isRetry ? "retry-offered" : "done";
+/**
+ * `gaveUp` means the learner said they didn't know ("forgot", "keine Ahnung"):
+ * a retry can't help someone who doesn't know, so the card goes straight to
+ * the answer.
+ */
+export function afterAnswer(result: Verdict, isRetry: boolean, gaveUp = false): CardStage {
+  return result !== "CORRECT" && !isRetry && !gaveUp ? "retry-offered" : "done";
 }
 
 /** Whether the reference answer may be shown after this answer. */
-export function shouldReveal(result: Verdict, isRetry: boolean): boolean {
-  return afterAnswer(result, isRetry) === "done";
+export function shouldReveal(result: Verdict, isRetry: boolean, gaveUp = false): boolean {
+  return afterAnswer(result, isRetry, gaveUp) === "done";
 }
 
 export type VerdictLabelKey = "review.correct" | "review.partial" | "review.incorrect" | "review.showAnswerLabel";

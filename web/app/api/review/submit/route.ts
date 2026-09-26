@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { evaluateAnswer } from "@/lib/ai";
-import { scheduleNextReview } from "@/lib/leitner";
+import { recordFirstAnswer } from "@/lib/review-record";
 import { shouldReveal } from "@/lib/review-flow";
 import { requireUserId } from "@/lib/auth";
 import { reserveAiCall } from "@/lib/entitlements";
@@ -97,89 +96,30 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { nextBox, dueAt } = scheduleNextReview({
-    currentBox: existing?.box ?? 1,
+  const outcome = await recordFirstAnswer({
+    userId,
+    cardId,
+    existing,
     result: evaluation.result,
-    aiDifficulty: evaluation.difficulty,
+    difficulty: evaluation.difficulty,
+    userAnswer,
+    feedback: evaluation.feedback,
+    errorTags: evaluation.errorTags,
   });
-
-  const isCorrect = evaluation.result === "CORRECT";
-  const now = new Date();
-
-  let progress;
-  try {
-    progress = await prisma.$transaction(async (tx) => {
-      if (existing) {
-        // Optimistic concurrency: only apply this review if nobody else has
-        // reviewed the card since we read it. Without the guard, two submits
-        // racing on the same card would each promote it a box.
-        const { count } = await tx.cardProgress.updateMany({
-          where: { id: existing.id, lastReviewedAt: existing.lastReviewedAt, totalReviews: existing.totalReviews },
-          data: {
-            box: nextBox,
-            dueAt,
-            lastReviewedAt: now,
-            correctStreak: isCorrect ? existing.correctStreak + 1 : 0,
-            totalReviews: { increment: 1 },
-            totalCorrect: isCorrect ? { increment: 1 } : undefined,
-            aiDifficulty: evaluation.difficulty,
-          },
-        });
-        if (count === 0) throw new ConcurrentReviewError();
-      } else {
-        // The (userId, cardId) unique constraint rejects a racing duplicate.
-        await tx.cardProgress.create({
-          data: {
-            userId,
-            cardId,
-            box: nextBox,
-            dueAt,
-            lastReviewedAt: now,
-            correctStreak: isCorrect ? 1 : 0,
-            totalReviews: 1,
-            totalCorrect: isCorrect ? 1 : 0,
-            aiDifficulty: evaluation.difficulty,
-          },
-        });
-      }
-
-      // Written in the same transaction, so the error log never records an
-      // attempt whose scheduling was rejected.
-      await tx.attempt.create({
-        data: {
-          userId,
-          cardId,
-          userAnswer,
-          result: evaluation.result,
-          aiFeedback: evaluation.feedback,
-          errorTags: evaluation.errorTags,
-        },
-      });
-
-      return tx.cardProgress.findUniqueOrThrow({ where: { userId_cardId: { userId, cardId } } });
-    });
-  } catch (err) {
-    const duplicate =
-      err instanceof ConcurrentReviewError ||
-      (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002");
-    if (duplicate) {
-      // The grade was discarded, so the learner isn't charged for it.
-      await reservation.release();
-      return NextResponse.json({ error: "already_reviewed" }, { status: 409 });
-    }
-    throw err;
+  if (!outcome.ok) {
+    // The grade was discarded, so the learner isn't charged for it.
+    await reservation.release();
+    return NextResponse.json({ error: "already_reviewed" }, { status: 409 });
   }
 
   // The reference answer is only sent once the card is finished: after a
-  // correct answer, or after the retry. A wrong first answer keeps it back so
-  // the retry is a real attempt. The due-cards endpoint never includes it.
+  // correct answer, after the retry, or when the learner said they didn't
+  // know. Otherwise it's held back so the retry is a real attempt.
   return NextResponse.json({
     evaluation,
-    progress,
-    reveal: shouldReveal(evaluation.result, false)
+    progress: outcome.progress,
+    reveal: shouldReveal(evaluation.result, false, evaluation.gaveUp)
       ? { answer: card.answer, explanation: card.explanation }
       : null,
   });
 }
-
-class ConcurrentReviewError extends Error {}
