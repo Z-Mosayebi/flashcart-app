@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tagExplanation, tagLabel } from "@/lib/error-tags";
+import { GRADER_TAGS, tagExplanation, tagLabel } from "@/lib/error-tags";
 
 describe("tagLabel", () => {
   it("gives known tags a readable name in each language", () => {
@@ -29,5 +29,35 @@ describe("tagExplanation", () => {
       expect(tagExplanation(tag, "de"), tag).toBeTruthy();
     }
   });
-  it("has no explanation for unknown tags", () => expect(tagExplanation("some-new-tag", "en")).toBeNull());
+  it("explains the extra tags the grader may use", () => {
+    for (const tag of [
+      "vocabulary",
+      "punctuation",
+      "capitalization",
+      "adjective-ending",
+      "plural-form",
+      "separable-verb",
+      "off-topic",
+    ]) {
+      expect(tagExplanation(tag, "en"), tag).toBeTruthy();
+      expect(tagExplanation(tag, "de"), tag).toBeTruthy();
+    }
+  });
+  it("maps common synonyms onto known tags", () => {
+    expect(tagLabel("word-choice", "en")).toBe(tagLabel("vocabulary", "en"));
+    expect(tagLabel("capitalisation", "en")).toBe(tagLabel("capitalization", "en"));
+    expect(tagLabel("plural", "en")).toBe(tagLabel("plural-form", "en"));
+    expect(tagLabel("tense", "en")).toBe(tagLabel("verb-tense", "en"));
+  });
+  it("still explains a tag it has never seen", () => {
+    expect(tagExplanation("some-new-tag", "en")).toMatch(/expected answer/i);
+    expect(tagExplanation("some-new-tag", "de")).toBeTruthy();
+  });
+});
+
+describe("GRADER_TAGS", () => {
+  it("lists every tag the grader is allowed to use, each explained", () => {
+    expect(GRADER_TAGS.length).toBe(17);
+    for (const tag of GRADER_TAGS) expect(tagExplanation(tag, "en")).not.toMatch(/expected answer/i);
+  });
 });

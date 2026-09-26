@@ -22,29 +22,24 @@ export default function ErrorTags({ tags }: { tags: string[] }) {
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) => {
           const active = open === tag;
-          const explained = tagExplanation(tag, locale) != null;
           return (
             <button
               key={tag}
               type="button"
-              aria-expanded={explained ? active : undefined}
-              disabled={!explained}
+              aria-expanded={active}
               onClick={() => setOpen(active ? null : tag)}
               className={clsx(
                 // min-h-9 keeps the chip comfortably tappable on phones.
                 "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-xs transition-colors",
                 active
                   ? "border-brand bg-brand text-white"
-                  : "border-line bg-surface text-ink-muted hover:text-ink",
-                !explained && "cursor-default"
+                  : "border-line bg-surface text-ink-muted hover:text-ink"
               )}
             >
               {tagLabel(tag, locale)}
-              {explained && (
-                <span aria-hidden className="text-[10px] opacity-70">
-                  {active ? "▲" : "ⓘ"}
-                </span>
-              )}
+              <span aria-hidden className="text-[10px] opacity-70">
+                {active ? "▲" : "ⓘ"}
+              </span>
             </button>
           );
         })}

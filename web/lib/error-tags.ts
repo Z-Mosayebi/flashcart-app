@@ -75,6 +75,55 @@ const TAGS: Record<string, TagInfo> = {
       de: "Ein Wort ist falsch geschrieben. Denk daran: Nomen schreibt man groß.",
     },
   },
+  vocabulary: {
+    label: { en: "Word choice", de: "Wortwahl" },
+    explanation: {
+      en: "A word doesn't fit here — it means something else, or a different German word is used in this context.",
+      de: "Ein Wort passt hier nicht — es bedeutet etwas anderes, oder im Deutschen sagt man in diesem Zusammenhang ein anderes Wort.",
+    },
+  },
+  punctuation: {
+    label: { en: "Punctuation", de: "Zeichensetzung" },
+    explanation: {
+      en: "A comma or other mark is missing or misplaced. In German, subordinate clauses (weil, dass, weswegen …) are always set off with commas.",
+      de: "Ein Komma oder anderes Zeichen fehlt oder steht falsch. Nebensätze (weil, dass, weswegen …) werden im Deutschen immer mit Komma abgetrennt.",
+    },
+  },
+  capitalization: {
+    label: { en: "Capital letters", de: "Groß-/Kleinschreibung" },
+    explanation: {
+      en: "Capitalisation is off. German capitalises every noun and the first word of a sentence; 'Sie' (formal you) is capitalised too.",
+      de: "Groß- und Kleinschreibung stimmt nicht. Alle Nomen und der Satzanfang werden großgeschrieben, ebenso die Anrede 'Sie'.",
+    },
+  },
+  "adjective-ending": {
+    label: { en: "Adjective ending", de: "Adjektivendung" },
+    explanation: {
+      en: "The adjective has the wrong ending. It depends on the article in front of it and on the noun's gender, number and case.",
+      de: "Das Adjektiv hat die falsche Endung. Sie hängt vom Artikel davor und von Genus, Numerus und Kasus des Nomens ab.",
+    },
+  },
+  "plural-form": {
+    label: { en: "Plural", de: "Plural" },
+    explanation: {
+      en: "The plural is wrong. German plurals are irregular (-e, -er, -n, -s, umlaut …) — learn each noun with its plural.",
+      de: "Die Pluralform stimmt nicht. Deutsche Pluralformen sind unregelmäßig (-e, -er, -n, -s, Umlaut …) — lerne jedes Nomen mit Plural.",
+    },
+  },
+  "separable-verb": {
+    label: { en: "Separable verb", de: "Trennbares Verb" },
+    explanation: {
+      en: "A separable verb isn't split correctly. In a main clause the prefix goes to the end (Ich rufe dich an); in a subordinate clause it stays joined (…, dass ich dich anrufe).",
+      de: "Ein trennbares Verb ist falsch getrennt. Im Hauptsatz steht die Vorsilbe am Ende (Ich rufe dich an), im Nebensatz bleibt sie dran (…, dass ich dich anrufe).",
+    },
+  },
+  "off-topic": {
+    label: { en: "Off topic", de: "Am Thema vorbei" },
+    explanation: {
+      en: "The answer doesn't do what the prompt asked — read the task again and answer that specific question.",
+      de: "Die Antwort passt nicht zur Aufgabe — lies sie noch einmal und beantworte genau diese Frage.",
+    },
+  },
   "missing-element": {
     label: { en: "Missing part", de: "Fehlender Teil" },
     explanation: {
@@ -84,9 +133,28 @@ const TAGS: Record<string, TagInfo> = {
   },
 };
 
+/** Tags the grader is told to choose from (mirrored in ai-service/app/services/tutor.py). */
+export const GRADER_TAGS = Object.keys(TAGS);
+
+/** Other names models use for the same mistakes. */
+const SYNONYMS: Record<string, string> = {
+  "word-choice": "vocabulary",
+  "wrong-word": "vocabulary",
+  capitalisation: "capitalization",
+  plural: "plural-form",
+  tense: "verb-tense",
+  "comma": "punctuation",
+};
+
 function normalise(tag: string): string {
-  return tag.trim().toLowerCase().replace(/[_\s]+/g, "-");
+  const key = tag.trim().toLowerCase().replace(/[_\s]+/g, "-");
+  return SYNONYMS[key] ?? key;
 }
+
+const FALLBACK: Record<Locale, string> = {
+  en: "Compare your sentence with the expected answer to see exactly what changed.",
+  de: "Vergleiche deinen Satz mit der erwarteten Antwort, um genau zu sehen, was anders ist.",
+};
 
 export function tagLabel(tag: string, locale: Locale): string {
   const known = TAGS[normalise(tag)];
@@ -95,6 +163,7 @@ export function tagLabel(tag: string, locale: Locale): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export function tagExplanation(tag: string, locale: Locale): string | null {
-  return TAGS[normalise(tag)]?.explanation[locale] ?? null;
+/** Every tag gets an explanation: a specific one if known, otherwise a pointer to the answer. */
+export function tagExplanation(tag: string, locale: Locale): string {
+  return TAGS[normalise(tag)]?.explanation[locale] ?? FALLBACK[locale];
 }
