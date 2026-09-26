@@ -46,18 +46,19 @@ export default function HoloCard({
 
     (async () => {
       if (reduceMotion) {
-        await animate(scope.current, { opacity: 0 }, { duration: 0.12 });
+        await animate(scope.current, { opacity: 0 }, { duration: 0.2 });
         if (cancelled) return;
         setShown(side);
         onFlipRef.current?.();
-        await animate(scope.current, { opacity: 1 }, { duration: 0.12 });
+        await animate(scope.current, { opacity: 1 }, { duration: 0.25 });
         return;
       }
-      await animate(scope.current, { rotateY: 90 }, { duration: 0.17, ease: "easeIn" });
+      // Unhurried: about 0.75s end to end, easing in and out like a real card.
+      await animate(scope.current, { rotateY: 90 }, { duration: 0.33, ease: [0.45, 0, 0.8, 0.4] });
       if (cancelled) return;
       setShown(side);
       onFlipRef.current?.();
-      await animate(scope.current, { rotateY: [-90, 0] }, { duration: 0.22, ease: "easeOut" });
+      await animate(scope.current, { rotateY: [-90, 0] }, { duration: 0.42, ease: [0.2, 0.6, 0.35, 1] });
     })();
 
     return () => {
