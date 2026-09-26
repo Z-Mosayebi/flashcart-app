@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -46,10 +47,19 @@ export default function TutorChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Arriving from a review card ("Practise this with the tutor") names the
+  // topic in the URL; the session opens on it straight away, once.
+  const requestedTopic = useSearchParams().get("topic");
+
   useEffect(() => {
     fetch("/api/topics")
       .then((r) => r.json())
-      .then((d) => setTopics(d.topics ?? []))
+      .then((d) => {
+        const list: Topic[] = d.topics ?? [];
+        setTopics(list);
+        const match = requestedTopic ? list.find((tp) => tp.id === requestedTopic) : undefined;
+        if (match) startSession(match);
+      })
       .catch(() => setError(t("common.error")))
       .finally(() => setLoadingTopics(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

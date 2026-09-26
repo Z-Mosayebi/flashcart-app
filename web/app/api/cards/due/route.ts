@@ -21,7 +21,7 @@ const CARD_FIELDS = {
   type: true,
   prompt: true,
   hints: true,
-  topic: { select: { name: true, pattern: true } },
+  topic: { select: { id: true, name: true, pattern: true } },
 } as const;
 
 export async function GET(req: NextRequest) {

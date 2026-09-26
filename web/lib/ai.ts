@@ -70,6 +70,8 @@ export interface EvaluateAnswerResponse {
   feedback: string;
   errorTags: string[];
   difficulty: number; // 0..1
+  /** The learner said they didn't know; the feedback teaches the rule instead. */
+  gaveUp?: boolean;
 }
 
 export function evaluateAnswer(req: EvaluateAnswerRequest) {

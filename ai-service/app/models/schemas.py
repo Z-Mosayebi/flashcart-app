@@ -73,6 +73,9 @@ class EvaluateAnswerResponse(BaseModel):
         serialization_alias="errorTags",
     )
     difficulty: float  # 0..1, fed into the Leitner scheduler blend
+    # True when the learner said they don't know or forgot. The app then
+    # skips the retry and shows the answer; the feedback teaches the rule.
+    gave_up: bool = Field(default=False, validation_alias="gaveUp", serialization_alias="gaveUp")
 
     @field_validator("difficulty", mode="after")
     @classmethod

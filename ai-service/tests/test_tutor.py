@@ -141,3 +141,37 @@ def test_grader_is_limited_to_the_explained_tags():
     for tag in GRADER_TAGS:
         assert f'"{tag}"' in SYSTEM_PROMPT
     assert "ONLY" in SYSTEM_PROMPT.split("errorTags")[1]
+
+
+def test_gave_up_defaults_to_false():
+    from app.models.schemas import EvaluateAnswerResponse
+
+    parsed = EvaluateAnswerResponse(result="CORRECT", feedback="Good.", errorTags=[], difficulty=0.1)
+    assert parsed.gave_up is False
+
+
+@patch("app.services.tutor.ask_json")
+def test_evaluate_endpoint_emits_gave_up(mock_ask_json, monkeypatch):
+    """An 'I forgot' answer comes back flagged so the app skips the retry."""
+    mock_ask_json.return_value = {
+        "result": "INCORRECT",
+        "feedback": "After 'ein', a neuter adjective takes '-es': ein beliebtes Reiseziel.",
+        "errorTags": ["missing-element"],
+        "difficulty": 1.0,
+        "gaveUp": True,
+    }
+    monkeypatch.setenv("AI_SERVICE_AUTH_TOKEN", "test-service-token")
+    res = client.post(
+        "/tutor/evaluate",
+        headers={"X-AI-Service-Token": "test-service-token"},
+        json={"cardPrompt": "Why -es?", "expectedAnswer": "Because…", "userAnswer": "I forget"},
+    )
+    assert res.status_code == 200
+    assert res.json()["gaveUp"] is True
+
+
+def test_prompt_teaches_instead_of_critiquing_a_give_up():
+    from app.services.tutor import SYSTEM_PROMPT
+
+    assert '"gaveUp"' in SYSTEM_PROMPT
+    assert "don't know" in SYSTEM_PROMPT

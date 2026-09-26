@@ -39,3 +39,14 @@ describe("verdictLabelKey", () => {
     expect(verdictLabelKey("CORRECT", true)).toBe("review.correct");
   });
 });
+
+describe("when the learner doesn't know", () => {
+  it("skips the retry and finishes the card", () => {
+    expect(afterAnswer("INCORRECT", false, true)).toBe("done");
+    expect(shouldReveal("INCORRECT", false, true)).toBe(true);
+  });
+  it("is unchanged when the flag is absent", () => {
+    expect(afterAnswer("INCORRECT", false)).toBe("retry-offered");
+    expect(afterAnswer("INCORRECT", false, false)).toBe("retry-offered");
+  });
+});
