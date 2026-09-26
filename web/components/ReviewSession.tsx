@@ -13,6 +13,7 @@ import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 import { afterAnswer, verdictLabelKey } from "@/lib/review-flow";
 import HoloCard from "@/components/HoloCard";
+import { announceProgress } from "@/lib/progress-events";
 import AiWaiting from "@/components/AiWaiting";
 import { cardPosition, deckLayers, rarityForBox } from "@/lib/card-look";
 import { playCardSound, type CardSound } from "@/lib/card-sounds";
@@ -162,6 +163,7 @@ export default function ReviewSession() {
       setStage(afterAnswer(data.evaluation.result, isRetry, data.evaluation.gaveUp));
       play(data.evaluation.result === "CORRECT" ? "correct" : "wrong");
       reload();
+      announceProgress();
       // The session tally, like the Leitner box, reflects the first answer.
       if (!isRetry) {
         setReviewed((n) => n + 1);
@@ -209,6 +211,7 @@ export default function ReviewSession() {
       setReveal(data.reveal);
       setStage("done");
       setReviewed((n) => n + 1);
+      announceProgress();
     } catch {
       setError(t("common.error"));
     } finally {

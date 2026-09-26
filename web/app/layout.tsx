@@ -4,6 +4,7 @@ import "./globals.css";
 import { auth } from "@/lib/auth";
 import Providers from "@/components/Providers";
 import NavBar from "@/components/NavBar";
+import GameHud from "@/components/GameHud";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"], // latin-ext covers German ä ö ü ß
@@ -50,6 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={`${inter.variable} font-sans`}>
         <Providers session={session}>
           <NavBar />
+          <GameHud />
           <main className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6 sm:pb-12 sm:pt-8">
             {children}
           </main>

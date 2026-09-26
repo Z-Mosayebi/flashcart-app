@@ -214,6 +214,9 @@ const en = {
   "drive.disconnect.hint": "Your cards stay — only Flashcard's access to Drive is removed.",
 
   "nav.admin": "Admin",
+  "game.level": "Level {n}",
+  "game.lvShort": "Lv {n}",
+  "game.levelUp": "Level up!",
 
   "plan.free": "Free plan",
   "plan.premiumUntil": "Premium until {date}",
@@ -479,6 +482,9 @@ const de: Record<TranslationKey, string> = {
   "drive.disconnect.hint": "Deine Karten bleiben — nur der Zugriff von Flashcard auf Drive wird entfernt.",
 
   "nav.admin": "Admin",
+  "game.level": "Level {n}",
+  "game.lvShort": "Lv {n}",
+  "game.levelUp": "Levelaufstieg!",
 
   "plan.free": "Kostenloser Plan",
   "plan.premiumUntil": "Premium bis {date}",

@@ -8,6 +8,7 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import SpeakButton from "@/components/SpeakButton";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import AiWaiting from "@/components/AiWaiting";
+import { announceProgress } from "@/lib/progress-events";
 import UsageMeter from "@/components/UsageMeter";
 import { readLimitHit, usePlan, type LimitHit } from "@/components/usePlan";
 
@@ -97,6 +98,7 @@ export default function TutorChat() {
         setMessages((m) => [...m, { id: nextId(), role: "assistant", content: data.reply }]);
         if (data.mastered) setMastered(true);
         reload();
+        announceProgress();
       } catch {
         setError(t("common.error"));
       } finally {
