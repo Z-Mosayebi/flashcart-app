@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
+import GoalRing from "@/components/GoalRing";
+import { usePlayerProgress } from "@/components/usePlayerProgress";
+import { RARITIES } from "@/lib/card-look";
+import type { TranslationKey } from "@/lib/i18n";
 
 interface TopicMastery {
   topic: string;
@@ -32,8 +37,6 @@ interface DashboardData {
   accuracyPct: number;
   totalAttempts: number;
 }
-
-const BOX_COLORS = ["bg-box1", "bg-box2", "bg-box3", "bg-box4", "bg-box5"];
 
 function StatTile({
   label,
@@ -67,6 +70,7 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { progress } = usePlayerProgress();
 
   useEffect(() => {
     fetch("/api/dashboard")
@@ -111,82 +115,90 @@ export default function Dashboard() {
     );
   }
 
-  const maxBox = Math.max(1, ...Object.values(data.overall.byBox));
+  const heading = "mb-3 text-xs font-semibold uppercase tracking-wider text-ink-faint";
+  const today = progress?.today;
+  const left = today ? Math.max(today.goal - today.done, 0) : 0;
+  const rise = (delay: number) => ({
+    initial: { opacity: 0, y: 12 },
+    animate: { opacity: 1, y: 0 },
+    transition: { delay, duration: 0.45, ease: [0.16, 1, 0.3, 1] },
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">
-          {t("dashboard.title")}
-        </h1>
-        <Link href="/review" className="btn-primary">
-          {t("dashboard.startReview")}
-        </Link>
-      </div>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
 
-      {/* Stat tiles */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label={t("dashboard.mastery")} value={data.overall.masteredPct} suffix="%" delay={0} />
-        <StatTile label={t("dashboard.accuracy")} value={data.accuracyPct} suffix="%" delay={0.05} />
-        <StatTile label={t("dashboard.dueToday")} value={data.dueToday} delay={0.1} />
-        <StatTile label={t("dashboard.streak")} value={data.streak} delay={0.15} />
-      </div>
+      {/* Today: the goal ring and what's left */}
+      {today && (
+        <motion.section {...rise(0)}>
+          <h2 className={heading}>{t("dashboard.today")}</h2>
+          <div className="card-surface flex items-center gap-4 p-4 sm:p-5">
+            <GoalRing done={today.done} goal={today.goal} size={74} />
+            <p className="text-sm leading-relaxed text-ink-muted">
+              {left > 0 ? t("dashboard.goalLeft", { n: left }) : t("dashboard.goalDone")}
+            </p>
+          </div>
+        </motion.section>
+      )}
 
-      {/* Leitner box distribution — CSS bars rather than a chart lib, so it
-          stays legible on a phone and ships no extra JS. */}
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="card-surface p-5 sm:p-6"
-      >
-        <h2 className="mb-5 font-medium">{t("dashboard.boxes")}</h2>
-        <div className="flex items-end gap-2 sm:gap-3" style={{ height: 140 }}>
-          {[1, 2, 3, 4, 5].map((box, i) => {
-            const count = data.overall.byBox[String(box)] ?? 0;
-            const pct = (count / maxBox) * 100;
-            return (
-              <div key={box} className="flex flex-1 flex-col items-center gap-2">
-                <span className="text-xs tabular-nums text-ink-muted">{count}</span>
-                <div className="flex w-full flex-1 items-end">
-                  <motion.div
-                    className={`w-full rounded-t-lg ${BOX_COLORS[i]}`}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${Math.max(pct, count > 0 ? 6 : 2)}%` }}
-                    transition={{ delay: 0.3 + i * 0.07, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  />
-                </div>
-                <span className="text-[11px] text-ink-faint">{box}</span>
+      {/* Play: straight into review */}
+      {progress && (
+        <motion.div {...rise(0.05)}>
+          {progress.dueNow > 0 ? (
+            <Link href="/review" className="btn-primary w-full py-4 text-base">
+              {t("dashboard.play", { n: progress.dueNow })}
+            </Link>
+          ) : (
+            <p className="card-surface p-4 text-center font-medium text-positive">{t("dashboard.caughtUp")}</p>
+          )}
+        </motion.div>
+      )}
+
+      {/* The collection: cards by rarity, plus the ones not played yet */}
+      {progress && (
+        <motion.section {...rise(0.1)}>
+          <h2 className={heading}>{t("dashboard.collection")}</h2>
+          <div className="grid grid-cols-6 gap-2">
+            {RARITIES.map((r) => (
+              <div
+                key={r}
+                className={clsx(
+                  "holo-card flex aspect-[3/4] flex-col items-center justify-end p-1.5 text-center",
+                  `rarity-${r}`
+                )}
+              >
+                <span className="relative text-lg font-extrabold tabular-nums">{progress.collection[r]}</span>
+                <span className="relative w-full truncate text-[10px] text-ink-muted">
+                  {t(`card.rarity.${r}` as TranslationKey)}
+                </span>
               </div>
-            );
-          })}
-        </div>
-      </motion.section>
+            ))}
+            <div className="card-surface flex aspect-[3/4] flex-col items-center justify-end p-1.5 text-center">
+              <span className="text-lg font-extrabold tabular-nums">{progress.collection.new}</span>
+              <span className="w-full truncate text-[10px] text-ink-muted">{t("dashboard.new")}</span>
+            </div>
+          </div>
+        </motion.section>
+      )}
 
-      {/* Per-topic mastery */}
+      {/* Topics */}
       {data.topicMastery.length > 0 && (
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="card-surface p-5 sm:p-6"
-        >
-          <h2 className="mb-4 font-medium">{t("dashboard.mastery")}</h2>
-          <div className="space-y-3.5">
+        <motion.section {...rise(0.15)}>
+          <h2 className={heading}>{t("dashboard.topics")}</h2>
+          <div className="card-surface space-y-3.5 p-4 sm:p-5">
             {data.topicMastery.slice(0, 8).map((tm, i) => (
               <div key={tm.topic}>
                 <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
                   <span className="truncate text-german">{tm.topic}</span>
-                  <span className="shrink-0 tabular-nums text-ink-faint">
-                    {tm.mastered}/{tm.total}
-                  </span>
+                  <span className="shrink-0 tabular-nums text-ink-faint">{tm.pct}%</span>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-line">
+                <div className="h-2 overflow-hidden rounded-full bg-line">
                   <motion.div
-                    className="h-full rounded-full bg-brand"
+                    className="h-full rounded-full"
+                    style={{ backgroundImage: "linear-gradient(90deg, rgb(var(--brand)), rgb(var(--gold)))" }}
                     initial={{ width: 0 }}
                     animate={{ width: `${tm.pct}%` }}
-                    transition={{ delay: 0.35 + i * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ delay: 0.2 + i * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                   />
                 </div>
               </div>
@@ -194,6 +206,12 @@ export default function Dashboard() {
           </div>
         </motion.section>
       )}
+
+      {/* Two quick stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <StatTile label={t("dashboard.accuracy")} value={data.accuracyPct} suffix="%" delay={0.2} />
+        <StatTile label={t("dashboard.answers")} value={data.totalAttempts} delay={0.25} />
+      </div>
 
       {/* Recent mistakes */}
       <motion.section
