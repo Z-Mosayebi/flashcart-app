@@ -37,6 +37,22 @@ const en = {
   "landing.feature3.title": "Reviews timed for you",
   "landing.feature3.body":
     "Spaced repetition that watches how hard you struggled, not just whether you were right, and brings cards back accordingly.",
+  "landing.faq.title": "Frequently asked questions",
+  "landing.faq.q1": "What is Flashcard?",
+  "landing.faq.a1":
+    "Flashcard is a free web app for learning to speak German. It turns your own notes into spoken flashcards, checks your answers with AI, and has a tutor that teaches the grammar step by step until you can build the sentence yourself.",
+  "landing.faq.q2": "Is Flashcard free?",
+  "landing.faq.a2":
+    "Yes. The free plan includes daily reviews, the AI tutor and one imported file. A premium plan with higher limits is available as a free trial.",
+  "landing.faq.q3": "What level of German is it for?",
+  "landing.faq.a3":
+    "Beginners to upper-intermediate learners (A1 to B2). Because the cards come from your own notes, the level follows what you are studying.",
+  "landing.faq.q4": "How does the spaced repetition work?",
+  "landing.faq.a4":
+    "Flashcard uses a Leitner system combined with how hard the AI judged your answer, so cards you struggled with come back sooner and easy ones later.",
+  "landing.faq.q5": "Does it work on my phone?",
+  "landing.faq.a5":
+    "Yes. Flashcard runs in the browser on phones, tablets and computers, with audio for every German prompt. No app store download is needed.",
 
   "review.title": "Review",
   "review.loading": "Loading your cards…",
@@ -323,6 +339,22 @@ const de: Record<TranslationKey, string> = {
   "landing.feature3.title": "Wiederholungen im richtigen Moment",
   "landing.feature3.body":
     "Verteiltes Lernen, das erkennt, wie schwer du dich getan hast — nicht nur, ob es richtig war — und Karten entsprechend zurückbringt.",
+  "landing.faq.title": "Häufige Fragen",
+  "landing.faq.q1": "Was ist Flashcard?",
+  "landing.faq.a1":
+    "Flashcard ist eine kostenlose Web-App, mit der du Deutsch sprechen lernst. Sie macht aus deinen eigenen Notizen gesprochene Karteikarten, prüft deine Antworten mit KI und hat einen Tutor, der dir die Grammatik Schritt für Schritt beibringt, bis du den Satz selbst bilden kannst.",
+  "landing.faq.q2": "Ist Flashcard kostenlos?",
+  "landing.faq.a2":
+    "Ja. Der kostenlose Plan enthält tägliche Wiederholungen, den KI-Tutor und eine importierte Datei. Einen Premium-Plan mit höheren Limits gibt es als kostenlose Testphase.",
+  "landing.faq.q3": "Für welches Niveau ist es gedacht?",
+  "landing.faq.a3":
+    "Für Anfänger bis zur oberen Mittelstufe (A1 bis B2). Da die Karten aus deinen eigenen Notizen entstehen, passt sich das Niveau deinem Lernstoff an.",
+  "landing.faq.q4": "Wie funktioniert die verteilte Wiederholung?",
+  "landing.faq.a4":
+    "Flashcard nutzt ein Leitner-System, kombiniert mit der Einschätzung der KI, wie schwer dir die Antwort fiel: Schwierige Karten kommen früher wieder, leichte später.",
+  "landing.faq.q5": "Funktioniert es auf dem Handy?",
+  "landing.faq.a5":
+    "Ja. Flashcard läuft im Browser auf Handy, Tablet und Computer, mit Audio für jede deutsche Aufgabe. Kein Download aus dem App Store nötig.",
 
   "review.title": "Wiederholen",
   "review.loading": "Deine Karten werden geladen…",

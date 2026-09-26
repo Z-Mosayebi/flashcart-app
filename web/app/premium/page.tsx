@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import PremiumRequestForm from "@/components/PremiumRequestForm";
 import PremiumHeader from "@/components/PremiumHeader";
@@ -14,3 +15,8 @@ export default async function PremiumPage() {
     </div>
   );
 }
+
+// Part of the signed-in app: keep it out of search results.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};

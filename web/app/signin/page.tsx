@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import AuthForm from "@/components/AuthForm";
@@ -19,3 +20,9 @@ export default async function SignInPage() {
     </div>
   );
 }
+
+export const metadata: Metadata = {
+  title: "Sign in or create a free account",
+  description: "Sign in to Flashcard or create a free account to start learning German with spoken flashcards and an AI tutor.",
+  alternates: { canonical: "/signin" },
+};

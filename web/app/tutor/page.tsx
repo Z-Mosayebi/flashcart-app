@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import TutorChat from "@/components/TutorChat";
@@ -14,3 +15,8 @@ export default async function TutorPage() {
     </Suspense>
   );
 }
+
+// Part of the signed-in app: keep it out of search results.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};

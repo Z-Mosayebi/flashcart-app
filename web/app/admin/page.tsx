@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import AdminDashboard from "@/components/AdminDashboard";
 import { requireUserId } from "@/lib/auth";
@@ -15,3 +16,8 @@ export default async function AdminPage() {
 
   return <AdminDashboard />;
 }
+
+// Part of the signed-in app: keep it out of search results.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};

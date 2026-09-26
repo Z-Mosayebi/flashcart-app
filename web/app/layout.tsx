@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import Providers from "@/components/Providers";
 import NavBar from "@/components/NavBar";
 import GameHud from "@/components/GameHud";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"], // latin-ext covers German ä ö ü ß
@@ -13,21 +14,42 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Flashcard — Learn German you can actually speak",
-  description:
-    "Spoken German flashcards built from your own notes, with an AI tutor that keeps asking until the grammar sticks. Spaced repetition that adapts to how hard you struggled.",
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: "%s · Flashcard" },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "learn German",
+    "German flashcards",
+    "speak German",
+    "German grammar practice",
+    "AI German tutor",
+    "spaced repetition",
+    "Deutsch lernen",
+    "Karteikarten Deutsch",
+  ],
+  authors: [{ name: "Parastoo Mosayebi", url: "https://parastoomosayebi.de" }],
+  creator: "Parastoo Mosayebi",
   openGraph: {
-    title: "Flashcard — Learn German you can actually speak",
+    title: SITE_TITLE,
     description:
-      "Spoken flashcards from your own notes, an AI tutor that pushes until you produce the grammar yourself, and reviews timed to how you actually did.",
+      "Spoken flashcards from your own notes, an AI tutor that teaches the grammar step by step, and reviews timed to how you actually did.",
     type: "website",
+    siteName: SITE_NAME,
+    locale: "en_US",
+    alternateLocale: ["de_DE"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: "Spoken German flashcards from your own notes, with an AI tutor that teaches the grammar step by step.",
   },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
-    { media: "(prefers-color-scheme: dark)", color: "#0c0a09" },
+    { media: "(prefers-color-scheme: light)", color: "#faf6ec" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1020" },
   ],
   width: "device-width",
   initialScale: 1,

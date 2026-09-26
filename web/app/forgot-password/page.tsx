@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import ForgotPasswordForm from "@/components/ForgotPasswordForm";
@@ -16,3 +17,9 @@ export default async function ForgotPasswordPage() {
     </div>
   );
 }
+
+// Part of the signed-in app: keep it out of search results.
+export const metadata: Metadata = {
+  title: "Forgot password",
+  robots: { index: false, follow: false },
+};

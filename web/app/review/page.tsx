@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import ReviewSession from "@/components/ReviewSession";
 import { requireUserId } from "@/lib/auth";
@@ -8,3 +9,8 @@ export default async function ReviewPage() {
 
   return <ReviewSession />;
 }
+
+// Part of the signed-in app: keep it out of search results.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};

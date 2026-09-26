@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import ResetPasswordForm from "@/components/ResetPasswordForm";
 
@@ -15,3 +16,9 @@ export default function ResetPasswordPage() {
     </div>
   );
 }
+
+// Part of the signed-in app: keep it out of search results.
+export const metadata: Metadata = {
+  title: "Reset password",
+  robots: { index: false, follow: false },
+};

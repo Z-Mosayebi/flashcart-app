@@ -11,6 +11,8 @@ const fadeUp = {
   show: { opacity: 1, y: 0 },
 };
 
+const FAQ_KEYS = [1, 2, 3, 4, 5] as const;
+
 const SAMPLE = "Der Grund, weswegen ich Deutsch lerne, ist meine Arbeit.";
 
 export default function Landing() {
@@ -145,6 +147,25 @@ export default function Landing() {
             <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t(f.bodyKey)}</p>
           </motion.div>
         ))}
+      </section>
+
+      {/* FAQ — plain <details> so it works without JavaScript and search
+          engines see every answer. */}
+      <section aria-labelledby="faq-title" className="mx-auto max-w-2xl pb-20">
+        <h2 id="faq-title" className="mb-5 text-center font-display text-2xl font-semibold tracking-tight">
+          {t("landing.faq.title")}
+        </h2>
+        <div className="space-y-3">
+          {FAQ_KEYS.map((n) => (
+            <details key={n} className="card-surface group p-0">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 font-medium">
+                <h3 className="text-base">{t(`landing.faq.q${n}`)}</h3>
+                <span aria-hidden className="text-ink-faint transition-transform group-open:rotate-45">+</span>
+              </summary>
+              <p className="px-5 pb-5 text-sm leading-relaxed text-ink-muted">{t(`landing.faq.a${n}`)}</p>
+            </details>
+          ))}
+        </div>
       </section>
     </div>
   );
