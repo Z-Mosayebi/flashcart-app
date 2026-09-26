@@ -257,3 +257,14 @@ def test_session_without_a_card_is_unchanged(mock_ask_json):
     mock_ask_json.return_value = {"reply": "Hallo!", "mastered": False}
     chat_turn(TutorChatRequest(topicName="Dativ", history=[], userMessage=""))
     assert "Start with this card" not in mock_ask_json.call_args[0][1]
+
+
+def test_tutor_is_told_to_make_the_learner_build_the_sentence():
+    """A task that already contains the German answer turns practice into copying."""
+    from app.services.tutor_chat import SYSTEM_PROMPT
+
+    p = SYSTEM_PROMPT.lower()
+    assert "never write the german sentence" in p
+    assert "english sentence to translate" in p or "situation" in p
+    assert "hint" in p  # help without giving the answer away
+    assert "your own task wording" in p  # don't mark what the task caused
