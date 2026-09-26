@@ -18,3 +18,8 @@ describe("preferencesUpdate", () => {
     expect(preferencesUpdate(null)).toBeNull();
   });
 });
+
+describe("preferencesUpdate — daily goal", () => {
+  it("accepts an offered goal", () => expect(preferencesUpdate({ dailyGoal: 20 })).toEqual({ dailyGoal: 20 }));
+  it("drops a goal that isn't offered", () => expect(preferencesUpdate({ dailyGoal: 7 })).toBeNull());
+});

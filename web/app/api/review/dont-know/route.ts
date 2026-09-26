@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     userAnswer: "—",
     feedback: null,
     errorTags: [],
+    kind: "DONT_KNOW",
   });
   if (!outcome.ok) return NextResponse.json({ error: "already_reviewed" }, { status: 409 });
 

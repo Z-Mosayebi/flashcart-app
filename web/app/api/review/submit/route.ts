@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
         result: evaluation.result,
         aiFeedback: evaluation.feedback,
         errorTags: evaluation.errorTags,
+        kind: "RETRY",
       },
     });
     return NextResponse.json({
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
     userAnswer,
     feedback: evaluation.feedback,
     errorTags: evaluation.errorTags,
+    kind: "FIRST",
   });
   if (!outcome.ok) {
     // The grade was discarded, so the learner isn't charged for it.

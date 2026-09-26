@@ -39,6 +39,9 @@ model User {
   // session stops working on its next request. Null means active.
   blockedAt DateTime?
 
+  // Cards per day the learner aims for: 5, 10, 20 or 30 (30 needs premium).
+  dailyGoal Int @default(10)
+
   accounts         Account[]
   sessions         Session[]
   resetTokens      PasswordResetToken[]
@@ -297,6 +300,14 @@ enum AttemptResult {
   INCORRECT
 }
 
+// First answer to a card, the one retry after a miss, or "I don't know".
+// Only first answers move a card between boxes; XP weighs each differently.
+enum AttemptKind {
+  FIRST
+  RETRY
+  DONT_KNOW
+}
+
 model Attempt {
   id         String        @id @default(cuid())
   userId     String
@@ -305,6 +316,7 @@ model Attempt {
   result     AttemptResult
   aiFeedback String?       @db.Text // AI's explanation of what was wrong/right
   errorTags  String[]      @default([]) // e.g. ["word-order", "case-declension"]
+  kind       AttemptKind   @default(FIRST)
   createdAt  DateTime      @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

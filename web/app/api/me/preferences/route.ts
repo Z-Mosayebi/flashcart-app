@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth";
 import { preferencesUpdate } from "@/lib/preferences";
+import { getEntitlement } from "@/lib/entitlements";
+import { goalAllowed } from "@/lib/game";
 
 /**
  * PATCH /api/me/preferences — persist interface language and/or time zone.
@@ -22,6 +24,14 @@ export async function PATCH(req: NextRequest) {
   const update = preferencesUpdate(body);
   if (!update) {
     return NextResponse.json({ error: "invalid_preferences" }, { status: 400 });
+  }
+
+  // 30 a day is past the free plan's 30 graded answers: premium and admins only.
+  if (update.dailyGoal !== undefined) {
+    const ent = await getEntitlement(userId);
+    if (!goalAllowed(update.dailyGoal, { premium: ent.plan === "premium", admin: ent.admin })) {
+      return NextResponse.json({ error: "goal_premium_only" }, { status: 403 });
+    }
   }
 
   await prisma.user.update({ where: { id: userId }, data: update });
