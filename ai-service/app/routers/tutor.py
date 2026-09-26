@@ -21,7 +21,7 @@ def evaluate(req: EvaluateAnswerRequest):
         raise HTTPException(status_code=502, detail=f"Evaluation failed: {e}") from e
 
 
-@router.post("/chat", response_model=TutorChatResponse)
+@router.post("/chat", response_model=TutorChatResponse, response_model_by_alias=True)
 def chat(req: TutorChatRequest):
     try:
         return chat_turn(req)

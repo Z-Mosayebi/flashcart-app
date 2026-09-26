@@ -268,3 +268,43 @@ def test_tutor_is_told_to_make_the_learner_build_the_sentence():
     assert "english sentence to translate" in p or "situation" in p
     assert "hint" in p  # help without giving the answer away
     assert "your own task wording" in p  # don't mark what the task caused
+
+
+@patch("app.services.tutor_chat.ask_json")
+def test_tutor_reply_carries_lesson_vocab_and_step(mock_ask_json):
+    mock_ask_json.return_value = {
+        "reply": "Schritt 1: Beginne mit 'Der Grund'.",
+        "mastered": False,
+        "lesson": "'weswegen' starts a clause; its verb goes to the end.",
+        "vocab": [
+            {"term": "der Grund", "meaning": "the reason"},
+            {"term": "reisen", "meaning": "to travel"},
+        ],
+        "step": 1,
+        "totalSteps": 4,
+    }
+    r = chat_turn(TutorChatRequest(topicName="weswegen", history=[], userMessage=""))
+    assert r.lesson.startswith("'weswegen'")
+    assert [v.term for v in r.vocab] == ["der Grund", "reisen"]
+    assert (r.step, r.total_steps) == (1, 4)
+
+
+@patch("app.services.tutor_chat.ask_json")
+def test_tutor_reply_without_extras_still_works(mock_ask_json):
+    mock_ask_json.return_value = {"reply": "Gut!", "mastered": False}
+    r = chat_turn(TutorChatRequest(topicName="weswegen", history=[], userMessage="x"))
+    assert r.lesson is None and r.vocab == [] and r.step is None and r.total_steps is None
+
+
+@patch("app.services.tutor_chat.ask_json")
+def test_tutor_step_out_of_range_is_dropped(mock_ask_json):
+    mock_ask_json.return_value = {"reply": "…", "mastered": False, "step": 5, "totalSteps": 3}
+    r = chat_turn(TutorChatRequest(topicName="weswegen", history=[], userMessage="x"))
+    assert r.step is None and r.total_steps is None
+
+
+def test_tutor_is_told_to_teach_in_guided_steps():
+    from app.services.tutor_chat import SYSTEM_PROMPT
+
+    for word in ('"lesson"', '"vocab"', '"step"', '"totalSteps"', "fewer steps"):
+        assert word in SYSTEM_PROMPT
