@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { GOALS, GOAL_LABELS, LEVELS, PAY_LABELS, PAY_OPTIONS } from "@/lib/premium";
 import { TRIAL_DAY_OPTIONS } from "@/lib/plans";
+import AdminUsers from "@/components/AdminUsers";
 
 interface RequestRow {
   id: string;
@@ -131,6 +132,9 @@ export default function AdminDashboard() {
           <Bars title="Level" counts={a.level} label={(k) => (k === "UNKNOWN" ? "Not sure" : k)} />
         </div>
       </section>
+
+      {/* Keeps the premium list and analytics in step with actions taken here. */}
+      <AdminUsers onChanged={() => void load()} />
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Requests ({data.pendingCount} pending)</h2>

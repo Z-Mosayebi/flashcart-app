@@ -108,6 +108,14 @@ const CHECKS = {
       check("NotionConnection restored", (await columnsOf(tx, "NotionConnection")) !== null);
     },
   },
+  "20260927000000_user_blocking": {
+    async up(tx) {
+      check("User.blockedAt added", (await columnsOf(tx, "User")).includes("blockedAt"));
+    },
+    async down(tx) {
+      check("User.blockedAt removed", !(await columnsOf(tx, "User")).includes("blockedAt"));
+    },
+  },
   "20260926000000_premium_trial": {
     async up(tx) {
       const cols = await columnsOf(tx, "User");
