@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePreferences } from "@/components/PreferencesProvider";
 import SpeakButton from "@/components/SpeakButton";
+import TutorGuide, { type VocabItem } from "@/components/TutorGuide";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import AiWaiting from "@/components/AiWaiting";
 import { announceProgress } from "@/lib/progress-events";
@@ -26,6 +27,10 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  lesson?: string | null;
+  vocab?: VocabItem[];
+  step?: number | null;
+  totalSteps?: number | null;
 }
 
 let messageCounter = 0;
@@ -101,7 +106,18 @@ export default function TutorChat() {
         const data = await res.json();
 
         setSessionId(data.sessionId);
-        setMessages((m) => [...m, { id: nextId(), role: "assistant", content: data.reply }]);
+        setMessages((m) => [
+          ...m,
+          {
+            id: nextId(),
+            role: "assistant",
+            content: data.reply,
+            lesson: data.lesson,
+            vocab: data.vocab,
+            step: data.step,
+            totalSteps: data.totalSteps,
+          },
+        ]);
         if (data.mastered) setMastered(true);
         reload();
         announceProgress();
@@ -247,6 +263,9 @@ export default function TutorChat() {
                     : "rounded-bl-md bg-surface-raised text-ink"
                 )}
               >
+                {m.role === "assistant" && (
+                  <TutorGuide lesson={m.lesson} vocab={m.vocab} step={m.step} totalSteps={m.totalSteps} />
+                )}
                 <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
               </div>
             </motion.div>

@@ -7,7 +7,7 @@ sync by inspection — the field names here are mirrored 1:1 on the TS side.
 import math
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 AttemptResult = Literal["CORRECT", "PARTIAL", "INCORRECT"]
 
@@ -120,6 +120,39 @@ class TutorChatRequest(BaseModel):
     focus: Optional[TutorFocus] = None
 
 
+class VocabItem(BaseModel):
+    term: str = Field(..., max_length=80)
+    meaning: str = Field(..., max_length=120)
+
+
 class TutorChatResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     reply: str
     mastered: bool = False  # AI signals when it's confident the user has this pattern down
+    # Guided sentence building. All optional: a reply without them still works.
+    lesson: Optional[str] = None  # the rule, when a new sentence starts
+    vocab: list[VocabItem] = Field(default_factory=list)  # key words for this sentence
+    step: Optional[int] = None  # which building step this reply asks for
+    total_steps: Optional[int] = Field(
+        None, validation_alias="totalSteps", serialization_alias="totalSteps"
+    )
+
+    @field_validator("vocab", mode="before")
+    @classmethod
+    def _cap_vocab(cls, v):
+        # A word list longer than a handful stops being a help.
+        return v[:6] if isinstance(v, list) else []
+
+    @model_validator(mode="after")
+    def _valid_step(self):
+        # A step outside 1..totalSteps would draw a broken progress bar: drop both.
+        ok = (
+            isinstance(self.step, int)
+            and isinstance(self.total_steps, int)
+            and 1 <= self.step <= self.total_steps <= 6
+        )
+        if not ok:
+            self.step = None
+            self.total_steps = None
+        return self

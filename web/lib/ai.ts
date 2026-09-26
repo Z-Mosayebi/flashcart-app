@@ -123,6 +123,11 @@ export interface TutorChatRequest {
 
 export interface TutorChatResponse {
   reply: string;
+  /** Guided sentence building (optional): the rule, key words, current step. */
+  lesson?: string | null;
+  vocab?: { term: string; meaning: string }[];
+  step?: number | null;
+  totalSteps?: number | null;
   /** The tutor sets this once the learner has produced the pattern reliably. */
   mastered: boolean;
 }

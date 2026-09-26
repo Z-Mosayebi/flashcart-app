@@ -131,7 +131,15 @@ export async function POST(req: NextRequest) {
         ]
       : []),
     prisma.tutorMessage.create({
-      data: { sessionId: session.id, role: "ASSISTANT" as const, content: result.reply },
+      // The step travels with the stored reply, so the next turn's history
+      // tells the tutor which part of the sentence it was asking for.
+      data: {
+        sessionId: session.id,
+        role: "ASSISTANT" as const,
+        content: result.step && result.totalSteps
+          ? `${result.reply}\n(Step ${result.step}/${result.totalSteps})`
+          : result.reply,
+      },
     }),
     prisma.tutorSession.update({
       where: { id: session.id },
@@ -145,5 +153,9 @@ export async function POST(req: NextRequest) {
     sessionId: session.id,
     reply: result.reply,
     mastered: result.mastered,
+    lesson: result.lesson ?? null,
+    vocab: result.vocab ?? [],
+    step: result.step ?? null,
+    totalSteps: result.totalSteps ?? null,
   });
 }
