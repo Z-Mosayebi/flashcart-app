@@ -470,6 +470,11 @@ TTS vendor (ElevenLabs, Azure, Google) is a single new class — no component ch
 
 Auto-play is off by default and toggleable in Settings.
 
+Card-game sound effects (Review): dealing and flipping are recordings of real
+playing cards from Kenney's "Casino Audio" pack (CC0, www.kenney.nl), stored
+as MP3 in `web/public/sounds/`; result chimes are synthesised with Web Audio.
+They can be switched off in Settings → Card sounds.
+
 ## ☁️ Deploying
 
 **Web (Vercel)** — import the repo, set root directory to `web/`, add the env vars

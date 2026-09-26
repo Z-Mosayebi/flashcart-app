@@ -1,15 +1,52 @@
 /**
- * Card-game sound effects, synthesised with the Web Audio API.
+ * Card-game sound effects, played with the Web Audio API.
  *
- * No audio files: nothing to download or license, and it plays everywhere,
- * including iPhone Safari (which is unreliable with Ogg). Browsers only allow
+ * Dealing and flipping use recordings of real playing cards (Kenney "Casino
+ * Audio", CC0 — see public/sounds/LICENSE-kenney-casino-audio.txt), as MP3 so
+ * iPhone Safari plays them. Result chimes are synthesised. If a recording
+ * can't load, the synthesised version plays instead. Browsers only allow
  * sound after the user has interacted with the page, so an effect played
  * before that is silently skipped rather than queued.
  */
 
 export type CardSound = "deal" | "flip" | "correct" | "wrong" | "complete" | "levelUp";
 
+/** Recorded sounds, by effect; effects not listed are synthesised. */
+const SAMPLES: Partial<Record<CardSound, string>> = {
+  deal: "/sounds/deal.mp3",
+  flip: "/sounds/flip.mp3",
+};
+
+export function sampleFor(sound: CardSound): string | null {
+  return SAMPLES[sound] ?? null;
+}
+
 let ctx: AudioContext | null = null;
+const decoded = new Map<string, Promise<AudioBuffer | null>>();
+
+/** Fetches and decodes a recording once; null if it can't be played. */
+function loadSample(ac: AudioContext, url: string): Promise<AudioBuffer | null> {
+  let pending = decoded.get(url);
+  if (!pending) {
+    pending = fetch(url)
+      .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(String(res.status)))))
+      .then((data) => ac.decodeAudioData(data))
+      .catch(() => null);
+    decoded.set(url, pending);
+  }
+  return pending;
+}
+
+async function playSample(ac: AudioContext, url: string, fallback: (ac: AudioContext) => void) {
+  const buffer = await loadSample(ac, url);
+  if (!buffer) return fallback(ac);
+  const src = ac.createBufferSource();
+  const gain = ac.createGain();
+  src.buffer = buffer;
+  gain.gain.value = 0.7;
+  src.connect(gain).connect(ac.destination);
+  src.start();
+}
 
 function context(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -108,8 +145,10 @@ export function playCardSound(sound: CardSound): void {
 
     const ac = context();
     if (!ac) return;
-    if (ac.state === "running") PLAYERS[sound](ac);
-    else void ac.resume().then(() => PLAYERS[sound](ac)).catch(() => {});
+    const sample = sampleFor(sound);
+    const run = (a: AudioContext) => (sample ? void playSample(a, sample, PLAYERS[sound]) : PLAYERS[sound](a));
+    if (ac.state === "running") run(ac);
+    else void ac.resume().then(() => run(ac)).catch(() => {});
   } catch {
     /* audio unavailable — the game works silently */
   }
