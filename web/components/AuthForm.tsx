@@ -26,7 +26,10 @@ export default function AuthForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Google sign-in lands back here with ?error=AccountBlocked when refused.
+  const [error, setError] = useState<string | null>(
+    params.get("error") === "AccountBlocked" ? t("auth.error.blocked") : null
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +73,7 @@ export default function AuthForm({
       });
 
       if (result?.error) {
-        setError(t("auth.error.invalid"));
+        setError(result.error === "AccountBlocked" ? t("auth.error.blocked") : t("auth.error.invalid"));
         return;
       }
 

@@ -35,6 +35,10 @@ model User {
   // its midnight. Null until the browser has reported one.
   timeZone String?
 
+  // Set when an admin blocks the account: sign-in is refused and any open
+  // session stops working on its next request. Null means active.
+  blockedAt DateTime?
+
   accounts         Account[]
   sessions         Session[]
   resetTokens      PasswordResetToken[]

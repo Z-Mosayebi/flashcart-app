@@ -12,6 +12,9 @@ import { encryptSecret } from "@/lib/crypto";
 import { isAdminEmail } from "@/lib/plans";
 
 const googleId = process.env.GOOGLE_CLIENT_ID;
+
+/** Error code shown on the sign-in page when an admin has blocked the account. */
+export const ACCOUNT_BLOCKED = "AccountBlocked";
 const googleSecret = process.env.GOOGLE_CLIENT_SECRET;
 
 export const authOptions: NextAuthOptions = {
@@ -69,6 +72,10 @@ export const authOptions: NextAuthOptions = {
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
 
+        // Checked after the password, so a block is only revealed to the
+        // account's owner, not to someone probing email addresses.
+        if (user.blockedAt) throw new Error(ACCOUNT_BLOCKED);
+
         return { id: user.id, email: user.email, name: user.name, image: user.image };
       },
     }),
@@ -103,6 +110,15 @@ export const authOptions: NextAuthOptions = {
     },
   },
   callbacks: {
+    /** Blocked accounts can't sign in with Google either. */
+    async signIn({ user }) {
+      if (!user?.email) return true;
+      const existing = await prisma.user.findUnique({
+        where: { email: user.email.toLowerCase() },
+        select: { blockedAt: true },
+      });
+      return existing?.blockedAt ? `/signin?error=${ACCOUNT_BLOCKED}` : true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.uid = user.id;
@@ -114,16 +130,21 @@ export const authOptions: NextAuthOptions = {
       if (token.uid) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.uid as string },
-          select: { locale: true, name: true, image: true, email: true },
+          select: { locale: true, name: true, image: true, email: true, blockedAt: true },
         });
-        if (dbUser) {
-          token.locale = dbUser.locale;
-          token.name = dbUser.name;
-          token.picture = dbUser.image;
-          // Only drives whether the nav shows the admin link; admin pages and
-          // APIs re-check against the database on every request.
-          token.isAdmin = isAdminEmail(dbUser.email);
+        // A deleted or blocked account loses its session on the next request:
+        // without uid, requireUserId() returns null everywhere.
+        if (!dbUser || dbUser.blockedAt) {
+          delete token.uid;
+          delete token.isAdmin;
+          return token;
         }
+        token.locale = dbUser.locale;
+        token.name = dbUser.name;
+        token.picture = dbUser.image;
+        // Only drives whether the nav shows the admin link; admin pages and
+        // APIs re-check against the database on every request.
+        token.isAdmin = isAdminEmail(dbUser.email);
       }
       return token;
     },
